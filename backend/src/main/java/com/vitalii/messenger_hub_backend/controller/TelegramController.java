@@ -40,6 +40,15 @@ public class TelegramController {
         return ResponseEntity.ok(telegramService.getUserChats(user.getId()));
     }
 
+    @PostMapping("/toggle-pin/{externalChatId}")
+    public ResponseEntity<Map<String, Boolean>> togglePin(
+            @PathVariable String externalChatId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        Long userId = userService.findByEmail(userDetails.getUsername()).getId();
+        boolean isPinned = telegramService.togglePinChat(userId, externalChatId);
+        return ResponseEntity.ok(Map.of("isPinned", isPinned));
+    }
+
     @GetMapping("/chats/{externalChatId}/messages")
     public ResponseEntity<List<MessageDTO>> getChatMessages(
             @AuthenticationPrincipal UserDetails userDetails,
@@ -62,18 +71,15 @@ public class TelegramController {
     }
 
     @PostMapping("/send")
-    public ResponseEntity<?> sendMessage(
-            @AuthenticationPrincipal UserDetails userDetails,
-            @RequestBody Map<String, Object> body) {
-        try {
-            User user = userService.findByEmail(userDetails.getUsername());
-            String chatId = String.valueOf(body.get("chat_id"));
-            String text = (String) body.get("text");
-            return ResponseEntity.ok(telegramService.sendMessage(user.getId(), chatId, text));
-        } catch (Exception e) {
-            log.error("Send error: {}", e.getMessage(), e);
-            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
-        }
+    public ResponseEntity<Map<String, Object>> sendMessage(
+            @RequestBody Map<String, String> body,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        Long userId = userService.findByEmail(userDetails.getUsername()).getId();
+        String chatId = body.get("chat_id");
+        String text = body.get("text");
+        String replyToMessageId = body.get("reply_to_message_id"); // optional
+        Map<String, Object> result = telegramService.sendMessage(userId, chatId, text, replyToMessageId);
+        return ResponseEntity.ok(result);
     }
 
     @GetMapping("/user-status/{chatId}")

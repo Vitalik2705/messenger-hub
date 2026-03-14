@@ -37,6 +37,7 @@ class SendMessageRequest(BaseModel):
     session: str
     chat_id: int
     text: str
+    reply_to_msg_id: int = None
 
 
 def get_display_name(entity):
@@ -84,7 +85,8 @@ async def sign_in(req: SignInRequest):
     session_str = client.session.save()
     clients.pop(req.phone, None)
     await client.disconnect()
-    return {"requires_password": False, "session": session_str, "user_id": me.id, "username": me.username, "first_name": me.first_name, "phone": me.phone}
+    return {"requires_password": False, "session": session_str, "user_id": me.id,
+            "username": me.username, "first_name": me.first_name, "phone": me.phone}
 
 
 @app.post("/auth/sign-in-password")
@@ -103,7 +105,8 @@ async def sign_in_password(req: SignInPasswordRequest):
     session_str = client.session.save()
     clients.pop(req.phone + "_2fa", None)
     await client.disconnect()
-    return {"session": session_str, "user_id": me.id, "username": me.username, "first_name": me.first_name, "phone": me.phone}
+    return {"session": session_str, "user_id": me.id, "username": me.username,
+            "first_name": me.first_name, "phone": me.phone}
 
 
 @app.get("/chats")
@@ -155,7 +158,47 @@ async def get_messages(chat_id: int, limit: int = 50, offset: int = 0, x_session
     await client.connect()
     try:
         me = await client.get_me()
+
+        # Fetch read_outbox_max_id for this specific chat only
+        # Much faster than scanning all dialogs
+        read_outbox_max_id = 0
+        try:
+            from telethon.tl.functions.messages import GetDialogFiltersRequest
+            from telethon.tl.functions.messages import GetPeerDialogsRequest
+            from telethon.tl.types import InputDialogPeer
+
+            entity = await client.get_entity(chat_id)
+            peer = await client.get_input_entity(chat_id)
+            result = await client(GetPeerDialogsRequest(peers=[InputDialogPeer(peer=peer)]))
+            if result.dialogs:
+                read_outbox_max_id = getattr(result.dialogs[0], 'read_outbox_max_id', 0)
+        except Exception as e:
+            print(f"Could not get read_outbox_max_id for {chat_id}: {e}")
+            read_outbox_max_id = 0
+
         messages = await client.get_messages(chat_id, limit=limit, add_offset=offset)
+
+        # Build id→message map for reply lookup within this batch
+        msg_map = {m.id: m for m in messages}
+
+        # Collect reply_to ids not in this batch
+        missing_reply_ids = []
+        for m in messages:
+            if m.reply_to and hasattr(m.reply_to, 'reply_to_msg_id'):
+                rid = m.reply_to.reply_to_msg_id
+                if rid and rid not in msg_map:
+                    missing_reply_ids.append(rid)
+
+        if missing_reply_ids:
+            try:
+                fetched = await client.get_messages(chat_id, ids=missing_reply_ids)
+                if fetched:
+                    for fm in (fetched if isinstance(fetched, list) else [fetched]):
+                        if fm:
+                            msg_map[fm.id] = fm
+            except:
+                pass
+
         result = []
         for m in messages:
             if not m.text and not m.media:
@@ -181,10 +224,42 @@ async def get_messages(chat_id: int, limit: int = 50, offset: int = 0, x_session
                         elif isinstance(attr, DocumentAttributeSticker):
                             media_type = "sticker"
 
+            # is_read: null for incoming, true/false for outgoing only
+            is_read = None
+            if m.sender_id == me.id:
+                if read_outbox_max_id > 0:
+                    is_read = m.id <= read_outbox_max_id
+                else:
+                    is_read = False
+
+            # Reply info
+            reply_to_msg_id = None
+            reply_to_text = None
+            reply_to_sender_name = None
+            if m.reply_to and hasattr(m.reply_to, 'reply_to_msg_id'):
+                rid = m.reply_to.reply_to_msg_id
+                if rid:
+                    reply_to_msg_id = str(rid)
+                    replied_msg = msg_map.get(rid)
+                    if replied_msg:
+                        reply_to_text = replied_msg.text or replied_msg.message or ""
+                        if replied_msg.media and not reply_to_text:
+                            reply_to_text = "📎 Media"
+                        try:
+                            sender = await replied_msg.get_sender()
+                            if sender:
+                                if hasattr(sender, 'first_name'):
+                                    reply_to_sender_name = f"{sender.first_name or ''} {sender.last_name or ''}".strip()
+                                elif hasattr(sender, 'title'):
+                                    reply_to_sender_name = sender.title
+                        except:
+                            pass
+
             result.append({
                 "id": m.id,
                 "text": m.text or None,
                 "sender_id": str(m.sender_id),
+                "sender_name": None,
                 "is_from_user": m.sender_id == me.id,
                 "timestamp": m.date.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S") + "Z",
                 "media_type": media_type,
@@ -192,7 +267,10 @@ async def get_messages(chat_id: int, limit: int = 50, offset: int = 0, x_session
                 "media_mime": None,
                 "file_name": None,
                 "duration": None,
-                "has_media": m.media is not None,
+                "is_read": is_read,
+                "reply_to_msg_id": reply_to_msg_id,
+                "reply_to_text": reply_to_text,
+                "reply_to_sender_name": reply_to_sender_name,
             })
         return list(reversed(result))
     finally:
@@ -219,7 +297,8 @@ async def get_message_media(chat_id: int, message_id: int, x_session: str = Head
         if isinstance(m.media, MessageMediaPhoto):
             photo_bytes = await client.download_media(m.media, file=bytes)
             if photo_bytes:
-                return {"media_base64": base64.b64encode(photo_bytes).decode('utf-8'), "media_mime": "image/jpeg", "file_name": None, "duration": None}
+                return {"media_base64": base64.b64encode(photo_bytes).decode('utf-8'),
+                        "media_mime": "image/jpeg", "file_name": None, "duration": None}
 
         elif isinstance(m.media, MessageMediaDocument):
             doc = m.media.document
@@ -235,9 +314,11 @@ async def get_message_media(chat_id: int, message_id: int, x_session: str = Head
             if doc.size < 5 * 1024 * 1024:
                 media_bytes = await client.download_media(m.media, file=bytes)
                 if media_bytes:
-                    return {"media_base64": base64.b64encode(media_bytes).decode('utf-8'), "media_mime": mime, "file_name": file_name, "duration": duration}
+                    return {"media_base64": base64.b64encode(media_bytes).decode('utf-8'),
+                            "media_mime": mime, "file_name": file_name, "duration": duration}
             else:
-                return {"media_base64": None, "media_mime": mime, "file_name": file_name or "file", "duration": duration}
+                return {"media_base64": None, "media_mime": mime,
+                        "file_name": file_name or "file", "duration": duration}
 
         return {"media_base64": None, "media_mime": None, "file_name": None, "duration": None}
     except Exception as e:
@@ -252,7 +333,11 @@ async def send_message(req: SendMessageRequest):
     client = TelegramClient(StringSession(req.session), API_ID, API_HASH)
     await client.connect()
     try:
-        msg = await client.send_message(req.chat_id, req.text)
+        msg = await client.send_message(
+            req.chat_id,
+            req.text,
+            reply_to=req.reply_to_msg_id  # ← pass reply
+        )
         return {"message_id": msg.id, "timestamp": msg.date.isoformat()}
     finally:
         await client.disconnect()

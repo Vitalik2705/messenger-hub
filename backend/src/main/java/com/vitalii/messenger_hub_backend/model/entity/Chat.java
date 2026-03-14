@@ -54,6 +54,9 @@ public class Chat {
     @Column(name = "is_archived")
     private Boolean isArchived = false;
 
+    @Column(name = "is_pinned", nullable = false, columnDefinition = "boolean default false")
+    private Boolean isPinned = false;
+
     @Column(name = "recipient_id")
     private String recipientId;
 

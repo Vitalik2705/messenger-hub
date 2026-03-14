@@ -22,10 +22,15 @@ public class MessageDTO {
     private Boolean isFromUser;
     private String status;
     private LocalDateTime timestamp;
+    private Boolean isRead;
     // media
     private String mediaType;    // "photo", "audio", "video", "sticker", "file"
     private String mediaBase64;
     private String mediaMime;
     private String fileName;
     private Integer duration;    // seconds, for audio/video
+
+    private String replyToMessageId;
+    private String replyToText;
+    private String replyToSenderName;
 }

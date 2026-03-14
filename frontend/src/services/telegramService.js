@@ -28,13 +28,17 @@ const telegramService = {
         return response.data;
     },
     getMessageMedia: async (chatId, messageId) => {
-        const response = await api.get(`/telegram/message-media`, {
+        const response = await api.get('/telegram/message-media', {
             params: { chatId, messageId }
         });
         return response.data;
     },
-    sendMessage: async (chatId, text) => {
-        const response = await api.post('/telegram/send', { chat_id: chatId, text });
+    sendMessage: async (chatId, text, replyToMessageId = null) => {
+        const response = await api.post('/telegram/send', {
+            chat_id: chatId,
+            text,
+            ...(replyToMessageId && { reply_to_message_id: replyToMessageId }),
+        });
         return response.data;
     },
     sync: async () => {
@@ -53,6 +57,7 @@ const telegramService = {
         const response = await api.post(`/telegram/mark-read/${chatId}`);
         return response.data;
     },
+    togglePin: (chatId) => api.post(`/telegram/toggle-pin/${chatId}`),
     disconnect: async () => {
         const response = await api.post('/telegram/disconnect');
         return response.data;
