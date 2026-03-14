@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { Box, Typography, IconButton } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
+import CloseIcon from '@mui/icons-material/Close';
 import ChatHeader from './chat/ChatHeader';
 import MessageBubble from './chat/MessageBubble';
 import websocketService from '../services/websocketService';
 import telegramService from '../services/telegramService';
 import slackService from '../services/slackService';
+import notificationService from '../services/notificationService';
 import { useAuth } from '../context/AuthContext';
 
 const ChatWindow = ({ chat, onClose }) => {
@@ -18,6 +20,7 @@ const ChatWindow = ({ chat, onClose }) => {
     const [userStatus, setUserStatus] = useState(null);
     const [offset, setOffset] = useState(0);
     const [hasMore, setHasMore] = useState(true);
+    const [replyingTo, setReplyingTo] = useState(null);
     const messagesEndRef = useRef(null);
     const messagesContainerRef = useRef(null);
     const pollingRef = useRef(null);
@@ -28,27 +31,46 @@ const ChatWindow = ({ chat, onClose }) => {
     useEffect(() => {
         if (!chat) return;
         setMessages([]); setOffset(0); setHasMore(true); setUserStatus(null);
+        setReplyingTo(null);
         loadMessages(); startPolling();
-        if (chat.messengerType === 'TELEGRAM' && chat.chatType === 'PERSONAL') { loadUserStatus(); startStatusPolling(); }
+        if (chat.messengerType === 'TELEGRAM' && chat.chatType === 'PERSONAL') {
+            loadUserStatus(); startStatusPolling();
+        }
         return () => { stopPolling(); stopStatusPolling(); };
     }, [chat?.externalChatId]);
 
-    useEffect(() => { if (isInitialLoad.current && messages.length > 0) { scrollToBottom(); isInitialLoad.current = false; } }, [messages]);
-    useEffect(() => { if (user) websocketService.connect(user.id, handleNewMessage); return () => websocketService.disconnect(); }, [user]);
+    useEffect(() => {
+        if (isInitialLoad.current && messages.length > 0) {
+            scrollToBottom();
+            isInitialLoad.current = false;
+        }
+    }, [messages]);
+
+    useEffect(() => {
+        if (user) websocketService.connect(user.id, handleNewMessage);
+        return () => websocketService.disconnect();
+    }, [user]);
 
     const startPolling = () => { stopPolling(); pollingRef.current = setInterval(pollNewMessages, 3000); };
     const stopPolling = () => { if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; } };
     const startStatusPolling = () => { stopStatusPolling(); statusPollingRef.current = setInterval(loadUserStatus, 30000); };
     const stopStatusPolling = () => { if (statusPollingRef.current) { clearInterval(statusPollingRef.current); statusPollingRef.current = null; } };
 
-    const loadUserStatus = async () => { try { setUserStatus(await telegramService.getUserStatus(chat.externalChatId)); } catch {} };
+    const loadUserStatus = async () => {
+        try { setUserStatus(await telegramService.getUserStatus(chat.externalChatId)); } catch {}
+    };
 
     const lazyLoadMedia = (msgs) => {
         if (chat.messengerType !== 'TELEGRAM') return;
         msgs.filter(m => m.mediaType && !m.mediaBase64).forEach(msg => {
             telegramService.getMessageMedia(chat.externalChatId, msg.externalMessageId)
-                .then(r => { if (r?.media_base64) setMessages(prev => prev.map(m => m.externalMessageId === msg.externalMessageId ? { ...m, mediaBase64: r.media_base64, mediaMime: r.media_mime || m.mediaMime, fileName: r.file_name || m.fileName, duration: r.duration || m.duration } : m)); })
-                .catch(() => {});
+                .then(r => {
+                    if (r?.media_base64) setMessages(prev => prev.map(m =>
+                        m.externalMessageId === msg.externalMessageId
+                            ? { ...m, mediaBase64: r.media_base64, mediaMime: r.media_mime || m.mediaMime, fileName: r.file_name || m.fileName, duration: r.duration || m.duration }
+                            : m
+                    ));
+                }).catch(() => {});
         });
     };
 
@@ -73,7 +95,10 @@ const ChatWindow = ({ chat, onClose }) => {
             const older = await telegramService.getChatMessages(chat.externalChatId, 50, offset);
             if (!older?.length) { setHasMore(false); return; }
             setOffset(p => p + 50);
-            setMessages(prev => { const ids = new Set(prev.map(m => m.externalMessageId)); return [...older.filter(m => !ids.has(m.externalMessageId)), ...prev]; });
+            setMessages(prev => {
+                const ids = new Set(prev.map(m => m.externalMessageId));
+                return [...older.filter(m => !ids.has(m.externalMessageId)), ...prev];
+            });
             if (older.length < 50) setHasMore(false);
             requestAnimationFrame(() => { if (container) container.scrollTop = container.scrollHeight - prevH; });
             lazyLoadMedia(older);
@@ -90,6 +115,18 @@ const ChatWindow = ({ chat, onClose }) => {
                 const ids = new Set(prev.map(m => m.externalMessageId || m.id));
                 const newOnes = fresh.filter(m => !ids.has(m.externalMessageId || m.id));
                 if (!newOnes.length) return prev;
+
+                // Notify for incoming messages when tab is not focused
+                newOnes
+                    .filter(m => !m.isFromUser)
+                    .forEach(m => {
+                        notificationService.showMessage(
+                            chat.name,
+                            m.text || '📎 Media',
+                            chat.messengerType
+                        );
+                    });
+
                 lazyLoadMedia(newOnes);
                 const c = messagesContainerRef.current;
                 if (!c || c.scrollHeight - c.scrollTop - c.clientHeight < 120) setTimeout(scrollToBottom, 50);
@@ -98,16 +135,33 @@ const ChatWindow = ({ chat, onClose }) => {
         } catch {}
     };
 
-    const handleNewMessage = (msg) => { if (msg.chatId === chat?.id) setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]); };
+    const handleNewMessage = (msg) => {
+        if (msg.chatId === chat?.id)
+            setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
+    };
+
     const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+
+    const handleReply = (message) => {
+        setReplyingTo(message);
+        inputRef.current?.focus();
+    };
+
+    const handleCancelReply = () => setReplyingTo(null);
 
     const handleSendMessage = async () => {
         if (!newMessage.trim()) return;
         setSending(true);
-        const text = newMessage; setNewMessage(''); inputRef.current?.focus();
+        const text = newMessage;
+        const replyId = replyingTo?.externalMessageId || null;
+        setNewMessage('');
+        setReplyingTo(null);
+        inputRef.current?.focus();
         try {
-            if (chat.messengerType === 'TELEGRAM') await telegramService.sendMessage(chat.externalChatId, text);
-            else if (chat.messengerType === 'SLACK') await slackService.sendMessage(chat.externalChatId, text);
+            if (chat.messengerType === 'TELEGRAM')
+                await telegramService.sendMessage(chat.externalChatId, text, replyId);
+            else if (chat.messengerType === 'SLACK')
+                await slackService.sendMessage(chat.externalChatId, text);
             setTimeout(pollNewMessages, 600);
         } catch { setNewMessage(text); } finally { setSending(false); }
     };
@@ -126,20 +180,20 @@ const ChatWindow = ({ chat, onClose }) => {
 
     return (
         <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100vh', bgcolor: '#f5f0eb', overflow: 'hidden', position: 'relative' }}>
-            {/* Subtle pattern */}
-            <Box sx={{ position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none', opacity: 0.4,
-                backgroundImage: `radial-gradient(#d4c9bc 1px, transparent 1px)`,
-                backgroundSize: '20px 20px',
-            }} />
+            <Box sx={{ position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none', opacity: 0.4, backgroundImage: 'radial-gradient(#d4c9bc 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
 
             <ChatHeader chat={chat} userStatus={userStatus} onClose={onClose} />
 
             {/* Messages */}
-            <Box ref={messagesContainerRef} onScroll={e => { if (e.target.scrollTop < 80) loadMoreMessages(); }} sx={{ flexGrow: 1, overflow: 'auto', px: 3, py: 2, zIndex: 1, position: 'relative', display: 'flex', flexDirection: 'column', '&::-webkit-scrollbar': { width: 4 }, '&::-webkit-scrollbar-thumb': { bgcolor: '#d4c9bc', borderRadius: 2 } }}>
+            <Box
+                ref={messagesContainerRef}
+                onScroll={e => { if (e.target.scrollTop < 80) loadMoreMessages(); }}
+                sx={{ flexGrow: 1, overflow: 'auto', px: 3, py: 2, zIndex: 1, position: 'relative', display: 'flex', flexDirection: 'column', '&::-webkit-scrollbar': { width: 4 }, '&::-webkit-scrollbar-thumb': { bgcolor: '#d4c9bc', borderRadius: 2 } }}
+            >
                 {loading ? (
                     <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <Box sx={{ textAlign: 'center' }}>
-                            <Box sx={{ width: 34, height: 34, border: `2.5px solid #f4c0a8`, borderTopColor: '#e8470a', borderRadius: '50%', animation: 'spin 0.7s linear infinite', mx: 'auto', mb: 2, '@keyframes spin': { '100%': { transform: 'rotate(360deg)' } } }} />
+                            <Box sx={{ width: 34, height: 34, border: '2.5px solid #f4c0a8', borderTopColor: '#e8470a', borderRadius: '50%', animation: 'spin 0.7s linear infinite', mx: 'auto', mb: 2, '@keyframes spin': { '100%': { transform: 'rotate(360deg)' } } }} />
                             <Typography sx={{ color: '#b0a090', fontSize: 13, fontFamily: '"DM Sans", sans-serif' }}>Loading messages...</Typography>
                         </Box>
                     </Box>
@@ -153,11 +207,18 @@ const ChatWindow = ({ chat, onClose }) => {
                     </Box>
                 ) : (
                     <Box>
-                        {loadingMore && <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}><Box sx={{ width: 18, height: 18, border: '2px solid #f4c0a8', borderTopColor: '#e8470a', borderRadius: '50%', animation: 'spin 0.7s linear infinite', '@keyframes spin': { '100%': { transform: 'rotate(360deg)' } } }} /></Box>}
-                        {!hasMore && <Box sx={{ textAlign: 'center', py: 2 }}><Typography sx={{ fontSize: 11, color: '#c4b5a0', fontFamily: '"DM Sans", sans-serif' }}>— Beginning of conversation —</Typography></Box>}
-
+                        {loadingMore && (
+                            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                                <Box sx={{ width: 18, height: 18, border: '2px solid #f4c0a8', borderTopColor: '#e8470a', borderRadius: '50%', animation: 'spin 0.7s linear infinite', '@keyframes spin': { '100%': { transform: 'rotate(360deg)' } } }} />
+                            </Box>
+                        )}
+                        {!hasMore && (
+                            <Box sx={{ textAlign: 'center', py: 2 }}>
+                                <Typography sx={{ fontSize: 11, color: '#c4b5a0', fontFamily: '"DM Sans", sans-serif' }}>— Beginning of conversation —</Typography>
+                            </Box>
+                        )}
                         {messages.map((msg, i) => {
-                            const showDate = i === 0 || new Date(messages[i-1].timestamp).toDateString() !== new Date(msg.timestamp).toDateString();
+                            const showDate = i === 0 || new Date(messages[i - 1].timestamp).toDateString() !== new Date(msg.timestamp).toDateString();
                             return (
                                 <Box key={msg.externalMessageId || msg.id || i}>
                                     {showDate && (
@@ -169,7 +230,12 @@ const ChatWindow = ({ chat, onClose }) => {
                                             <Box sx={{ flex: 1, height: 1, bgcolor: '#e4ddd4' }} />
                                         </Box>
                                     )}
-                                    <MessageBubble message={msg} chat={chat} accentColor={accentColor} />
+                                    <MessageBubble
+                                        message={msg}
+                                        chat={chat}
+                                        accentColor={accentColor}
+                                        onReply={handleReply}
+                                    />
                                 </Box>
                             );
                         })}
@@ -178,24 +244,41 @@ const ChatWindow = ({ chat, onClose }) => {
                 )}
             </Box>
 
-            {/* Input */}
-            <Box sx={{ px: 2.5, py: 2, bgcolor: '#faf7f4', borderTop: '1px solid #ede8e1', zIndex: 10, flexShrink: 0, display: 'flex', alignItems: 'flex-end', gap: 1.5 }}>
-                <Box sx={{ flex: 1, bgcolor: 'white', border: '1px solid #e4ddd4', borderRadius: 3, px: 2, py: 1, boxShadow: '0 1px 6px rgba(26,18,8,0.04)', '&:focus-within': { border: '1px solid #c4a882', boxShadow: '0 2px 10px rgba(26,18,8,0.08)' }, transition: 'all 0.15s' }}>
-                    <textarea
-                        ref={inputRef}
-                        placeholder="Type a message..."
-                        value={newMessage}
-                        onChange={e => setNewMessage(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
-                        disabled={sending}
-                        rows={1}
-                        style={{ width: '100%', background: 'none', border: 'none', outline: 'none', color: '#2d1f0f', fontSize: 13.5, fontFamily: '"DM Sans", sans-serif', resize: 'none', lineHeight: 1.6, maxHeight: 120, overflowY: 'auto' }}
-                        onInput={e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; }}
-                    />
+            {/* Reply preview + Input */}
+            <Box sx={{ bgcolor: '#faf7f4', borderTop: '1px solid #ede8e1', zIndex: 10, flexShrink: 0 }}>
+                {replyingTo && (
+                    <Box sx={{ px: 2.5, pt: 1.5, pb: 0.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box sx={{ flex: 1, pl: 1.5, py: 0.6, pr: 1, borderLeft: '3px solid #e8470a', bgcolor: 'rgba(232,71,10,0.04)', borderRadius: '0 6px 6px 0', minWidth: 0 }}>
+                            <Typography sx={{ fontSize: 11, fontWeight: 700, color: '#e8470a', fontFamily: '"DM Sans", sans-serif' }}>
+                                {replyingTo.isFromUser ? 'You' : (replyingTo.senderName || chat.name)}
+                            </Typography>
+                            <Typography sx={{ fontSize: 11.5, color: '#9a8878', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: '"DM Sans", sans-serif' }}>
+                                {replyingTo.text || '📎 Media'}
+                            </Typography>
+                        </Box>
+                        <Box onClick={handleCancelReply} sx={{ cursor: 'pointer', color: '#b0a090', display: 'flex', flexShrink: 0, p: 0.5, borderRadius: '50%', '&:hover': { color: '#e8470a', bgcolor: 'rgba(232,71,10,0.06)' }, transition: 'all 0.15s' }}>
+                            <CloseIcon sx={{ fontSize: 16 }} />
+                        </Box>
+                    </Box>
+                )}
+                <Box sx={{ px: 2.5, py: 2, display: 'flex', alignItems: 'flex-end', gap: 1.5 }}>
+                    <Box sx={{ flex: 1, bgcolor: 'white', border: '1px solid #e4ddd4', borderRadius: 3, px: 2, py: 1, boxShadow: '0 1px 6px rgba(26,18,8,0.04)', '&:focus-within': { border: '1px solid #c4a882', boxShadow: '0 2px 10px rgba(26,18,8,0.08)' }, transition: 'all 0.15s' }}>
+                        <textarea
+                            ref={inputRef}
+                            placeholder="Type a message..."
+                            value={newMessage}
+                            onChange={e => setNewMessage(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
+                            disabled={sending}
+                            rows={1}
+                            style={{ width: '100%', background: 'none', border: 'none', outline: 'none', color: '#2d1f0f', fontSize: 13.5, fontFamily: '"DM Sans", sans-serif', resize: 'none', lineHeight: 1.6, maxHeight: 120, overflowY: 'auto' }}
+                            onInput={e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; }}
+                        />
+                    </Box>
+                    <IconButton onClick={handleSendMessage} disabled={!newMessage.trim() || sending} sx={{ width: 44, height: 44, flexShrink: 0, bgcolor: newMessage.trim() ? '#e8470a' : '#f0ebe3', color: newMessage.trim() ? 'white' : '#c4b5a0', borderRadius: 2, boxShadow: newMessage.trim() ? '0 4px 14px rgba(232,71,10,0.35)' : 'none', transition: 'all 0.2s cubic-bezier(0.4,0,0.2,1)', '&:hover': { transform: newMessage.trim() ? 'scale(1.06)' : 'none', bgcolor: newMessage.trim() ? '#d03d08' : '#f0ebe3' }, '&:disabled': { bgcolor: '#f0ebe3', color: '#d4c9bc' } }}>
+                        <SendIcon sx={{ fontSize: 18 }} />
+                    </IconButton>
                 </Box>
-                <IconButton onClick={handleSendMessage} disabled={!newMessage.trim() || sending} sx={{ width: 44, height: 44, flexShrink: 0, bgcolor: newMessage.trim() ? '#e8470a' : '#f0ebe3', color: newMessage.trim() ? 'white' : '#c4b5a0', borderRadius: 2, border: 'none', boxShadow: newMessage.trim() ? '0 4px 14px rgba(232,71,10,0.35)' : 'none', transition: 'all 0.2s cubic-bezier(0.4,0,0.2,1)', '&:hover': { transform: newMessage.trim() ? 'scale(1.06)' : 'none', bgcolor: newMessage.trim() ? '#d03d08' : '#f0ebe3' }, '&:disabled': { bgcolor: '#f0ebe3', color: '#d4c9bc' } }}>
-                    <SendIcon sx={{ fontSize: 18 }} />
-                </IconButton>
             </Box>
         </Box>
     );

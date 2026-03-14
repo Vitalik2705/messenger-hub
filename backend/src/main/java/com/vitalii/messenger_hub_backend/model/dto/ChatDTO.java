@@ -24,5 +24,5 @@ public class ChatDTO {
     private LocalDateTime lastMessageAt;
     private Boolean isArchived;
     private String avatarBase64;
-
+    private Boolean isPinned;
 }

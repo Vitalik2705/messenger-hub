@@ -64,7 +64,6 @@ public class TelegramService {
         if (Boolean.TRUE.equals(requiresPassword)) {
             return result;
         }
-
         saveAccount(userId, result);
         return result;
     }
@@ -180,6 +179,7 @@ public class TelegramService {
                     .lastMessage(lastMessage)
                     .lastMessageAt(chat.getLastMessageAt())
                     .isArchived(false)
+                    .isPinned(chat.getIsPinned() != null && chat.getIsPinned()) // ← THIS must be present
                     .avatarBase64(chat.getAvatarBase64())
                     .build());
         }
@@ -229,6 +229,19 @@ public class TelegramService {
         }
     }
 
+    @Transactional
+    public boolean togglePinChat(Long userId, String externalChatId) {
+        MessengerAccount account = getAccountOrThrow(userId);
+        Chat chat = chatRepository
+                .findByMessengerAccountIdAndExternalChatId(account.getId(), externalChatId)
+                .orElseThrow(() -> new RuntimeException("Chat not found"));
+        boolean newState = !Boolean.TRUE.equals(chat.getIsPinned());
+        chat.setIsPinned(newState);
+        chatRepository.save(chat);
+        log.info("Chat {} pinned={}", externalChatId, newState);
+        return newState;
+    }
+
     // ── MESSAGES ──────────────────────────────────────────────────────────────
 
     public List<MessageDTO> getChatMessages(String externalChatId, Long userId) {
@@ -239,7 +252,8 @@ public class TelegramService {
         return getChatMessages(externalChatId, userId, limit, offset, 0);
     }
 
-    public List<MessageDTO> getChatMessages(String externalChatId, Long userId, int limit, int offset, int minId) {
+    public List<MessageDTO> getChatMessages(String externalChatId, Long userId,
+                                            int limit, int offset, int minId) {
         long t0 = System.currentTimeMillis();
         MessengerAccount account = getAccountOrThrow(userId);
         long t1 = System.currentTimeMillis();
@@ -248,9 +262,10 @@ public class TelegramService {
         headers.set("X-Session", account.getAccessToken());
         HttpEntity<Void> entity = new HttpEntity<>(headers);
 
+        // Python returns a plain List — deserialize directly as List
         ResponseEntity<List> response = restTemplate.exchange(
                 pythonServiceUrl + "/messages?chat_id=" + externalChatId
-                + "&limit=" + limit + "&offset=" + offset + "&min_id=" + minId,
+                + "&limit=" + limit + "&offset=" + offset,
                 HttpMethod.GET, entity, List.class);
 
         List<Map<String, Object>> rawMessages = response.getBody();
@@ -278,10 +293,19 @@ public class TelegramService {
             Object durObj = raw.get("duration");
             if (durObj instanceof Number) duration = ((Number) durObj).intValue();
 
+            // isRead: null = incoming (no tick), false = sent unread, true = read
+            Boolean isRead = null;
+            Object isReadObj = raw.get("is_read");
+            if (isReadObj instanceof Boolean) isRead = (Boolean) isReadObj;
+            String replyToMessageId = (String) raw.get("reply_to_msg_id");
+            String replyToText = (String) raw.get("reply_to_text");
+            String replyToSenderName = (String) raw.get("reply_to_sender_name");
+
             return MessageDTO.builder()
                     .externalMessageId(cleanId(String.valueOf(raw.get("id"))))
                     .text((String) raw.get("text"))
                     .senderId(cleanId(String.valueOf(raw.get("sender_id"))))
+                    .senderName((String) raw.get("sender_name"))
                     .isFromUser((Boolean) raw.get("is_from_user"))
                     .timestamp(timestamp)
                     .mediaType((String) raw.get("media_type"))
@@ -289,6 +313,10 @@ public class TelegramService {
                     .mediaMime((String) raw.get("media_mime"))
                     .fileName((String) raw.get("file_name"))
                     .duration(duration)
+                    .isRead(isRead)
+                    .replyToMessageId(replyToMessageId)
+                    .replyToText(replyToText)
+                    .replyToSenderName(replyToSenderName)
                     .build();
         }).collect(Collectors.toList());
 
@@ -308,7 +336,8 @@ public class TelegramService {
 
         try {
             ResponseEntity<Map> response = restTemplate.exchange(
-                    pythonServiceUrl + "/message-media?chat_id=" + chatId + "&message_id=" + messageId,
+                    pythonServiceUrl + "/message-media?chat_id=" + chatId
+                    + "&message_id=" + messageId,
                     HttpMethod.GET, entity, Map.class);
             return response.getBody();
         } catch (Exception e) {
@@ -319,29 +348,33 @@ public class TelegramService {
 
     // ── SEND ──────────────────────────────────────────────────────────────────
 
-    public Map<String, Object> sendMessage(Long userId, String chatId, String text) {
+    public Map<String, Object> sendMessage(Long userId, String chatId, String text, String replyToMessageId) {
         MessengerAccount account = getAccountOrThrow(userId);
 
         Map<String, Object> request = new HashMap<>();
         request.put("session", account.getAccessToken());
         try {
-            String cleanId = cleanId(chatId);
-            request.put("chat_id", Long.parseLong(cleanId));
+            request.put("chat_id", Long.parseLong(cleanId(chatId)));
         } catch (NumberFormatException e) {
-            log.error("Invalid chat_id format: {}", chatId);
             throw new RuntimeException("Invalid chat ID: " + chatId);
         }
         request.put("text", text);
+        if (replyToMessageId != null && !replyToMessageId.isBlank()) {
+            request.put("reply_to_msg_id", Long.parseLong(cleanId(replyToMessageId)));
+        }
 
         try {
             ResponseEntity<Map> response = restTemplate.postForEntity(
                     pythonServiceUrl + "/send", request, Map.class);
-            log.info("Message sent to chat: {}", chatId);
             return response.getBody() != null ? response.getBody() : Map.of("success", true);
         } catch (Exception e) {
-            log.error("Failed to send message to {}: {}", chatId, e.getMessage(), e);
             throw new RuntimeException("Failed to send: " + e.getMessage());
         }
+    }
+
+    // Keep old overload for backward compat:
+    public Map<String, Object> sendMessage(Long userId, String chatId, String text) {
+        return sendMessage(userId, chatId, text, null);
     }
 
     // ── MARK READ ─────────────────────────────────────────────────────────────
@@ -418,7 +451,6 @@ public class TelegramService {
                 .orElseThrow(() -> new CustomException("Telegram not connected", HttpStatus.NOT_FOUND));
     }
 
-    /** Strips decimal suffix from JSON numbers: "123456.0" → "123456" */
     private String cleanId(String id) {
         if (id == null) return null;
         int dot = id.indexOf('.');

@@ -7,6 +7,7 @@ import ChatListItem from './sidebar/ChatListItem';
 import WelcomeScreen from './sidebar/WelcomeScreen';
 import TelegramDialog from './dialogs/TelegramDialog';
 import SlackDialog from './dialogs/SlackDialog';
+import notificationService from '../services/notificationService';
 import { Box, Typography, IconButton, List, Tooltip } from '@mui/material';
 import LogoutIcon from '@mui/icons-material/Logout';
 import SyncIcon from '@mui/icons-material/Sync';
@@ -43,6 +44,9 @@ const DashboardPage = () => {
 
     useEffect(() => { checkStatus(); }, []);
     useEffect(() => {
+        notificationService.requestPermission();
+    }, []);
+    useEffect(() => {
         if (telegramConnected || slackConnected) startChatPolling();
         else stopChatPolling();
         return () => stopChatPolling();
@@ -55,10 +59,41 @@ const DashboardPage = () => {
         try {
             if (telegramConnected) {
                 const chats = await telegramService.getChats();
-                setTelegramChats(prev => { const m = new Map(prev.map(c => [c.externalChatId, c.avatarBase64])); return chats.map(c => ({ ...c, avatarBase64: m.get(c.externalChatId) || c.avatarBase64 })); });
+                setTelegramChats(prev => {
+                    const avatarMap = new Map(prev.map(c => [c.externalChatId, c.avatarBase64]));
+                    const pinMap = new Map(prev.map(c => [c.externalChatId, c.isPinned]));
+                    const unreadMap = new Map(prev.map(c => [c.externalChatId, c.unreadCount || 0]));
+
+                    chats.forEach(chat => {
+                        const prevUnread = unreadMap.get(chat.externalChatId) || 0;
+                        const newUnread = chat.unreadCount || 0;
+                        if (newUnread > prevUnread) {
+                            notificationService.showMessage(chat.name, chat.lastMessage, 'TELEGRAM');
+                        }
+                    });
+
+                    return chats.map(c => ({
+                        ...c,
+                        avatarBase64: avatarMap.get(c.externalChatId) || c.avatarBase64,
+                        isPinned: pinMap.get(c.externalChatId) ?? c.isPinned,
+                    }));
+                });
             }
-            if (slackConnected) setSlackChats(await slackService.getChats());
-        } catch {}
+            if (slackConnected) {
+                const chats = await slackService.getChats();
+                setSlackChats(prev => {
+                    const unreadMap = new Map(prev.map(c => [c.externalChatId, c.unreadCount || 0]));
+                    chats.forEach(chat => {
+                        const prevUnread = unreadMap.get(chat.externalChatId) || 0;
+                        const newUnread = chat.unreadCount || 0;
+                        if (newUnread > prevUnread) {
+                            notificationService.showMessage(chat.name, chat.lastMessage, 'SLACK');
+                        }
+                    });
+                    return chats;
+                });
+            }
+        } catch { /* empty */ }
     };
 
     const checkStatus = async () => {
@@ -82,7 +117,7 @@ const DashboardPage = () => {
                     .then(r => { if (r?.avatar_base64) setTelegramChats(prev => prev.map(c => c.externalChatId === chat.externalChatId ? { ...c, avatarBase64: r.avatar_base64 } : c)); })
                     .catch(() => {});
             });
-        } catch {}
+        } catch { /* empty */ }
     };
 
     const loadSlackChats = async () => { try { setSlackChats(await slackService.getChats()); } catch {} };
@@ -113,16 +148,42 @@ const DashboardPage = () => {
         finally { setSlackLoading(false); }
     };
     const handleDisconnectSlack = async () => { try { await slackService.disconnect(); setSlackConnected(false); setSlackChats([]); setSelectedChat(p => p?.messengerType === 'SLACK' ? null : p); } catch {} };
+
     const handleSelectChat = (chat) => {
         setSelectedChat(chat);
-        if (chat.messengerType === 'TELEGRAM' && chat.unreadCount > 0) { telegramService.markAsRead(chat.externalChatId).catch(() => {}); setTelegramChats(p => p.map(c => c.id === chat.id ? { ...c, unreadCount: 0 } : c)); }
+        if (chat.messengerType === 'TELEGRAM' && chat.unreadCount > 0) {
+            telegramService.markAsRead(chat.externalChatId).catch(() => {});
+            setTelegramChats(p => p.map(c => c.id === chat.id ? { ...c, unreadCount: 0 } : c));
+        }
     };
-    const handleSync = async () => { setSyncing(true); try { if (telegramConnected) { await telegramService.sync(); loadTelegramChats(); } if (slackConnected) { await slackService.sync(); loadSlackChats(); } } catch {} finally { setSyncing(false); } };
+
+    const handleSync = async () => {
+        setSyncing(true);
+        try {
+            if (telegramConnected) { await telegramService.sync(); loadTelegramChats(); }
+            if (slackConnected) { await slackService.sync(); loadSlackChats(); }
+        } catch { /* empty */ } finally { setSyncing(false); }
+    };
+
+    const handleTogglePin = async (chat) => {
+        if (chat.messengerType !== 'TELEGRAM') return;
+        try {
+            const res = await telegramService.togglePin(chat.externalChatId);
+            const isPinned = res.data.isPinned;
+            setTelegramChats(prev => prev.map(c =>
+                c.id === chat.id ? { ...c, isPinned } : c
+            ));
+        } catch (err) { console.error(err); }
+    };
 
     const allChats = [...telegramChats, ...slackChats]
         .filter(c => c.name?.toLowerCase().includes(searchQuery.toLowerCase()))
         .filter(c => filter === 'ALL' || c.messengerType === filter)
-        .sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt));
+        .sort((a, b) => {
+            if (a.isPinned && !b.isPinned) return -1;
+            if (!a.isPinned && b.isPinned) return 1;
+            return new Date(b.lastMessageAt) - new Date(a.lastMessageAt);
+        });
 
     const totalUnread = [...telegramChats, ...slackChats].reduce((s, c) => s + (c.unreadCount || 0), 0);
     const tgUnread = telegramChats.reduce((s, c) => s + (c.unreadCount || 0), 0);
@@ -133,28 +194,17 @@ const DashboardPage = () => {
             <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
 
             {/* Sidebar */}
-            <Box sx={{
-                width: 320, flexShrink: 0,
-                display: 'flex', flexDirection: 'column',
-                bgcolor: '#faf7f4',
-                borderRight: '1px solid #ede8e1',
-                transition: 'width 0.3s ease',
-            }}>
+            <Box sx={{ width: 320, flexShrink: 0, display: 'flex', flexDirection: 'column', bgcolor: '#faf7f4', borderRight: '1px solid #ede8e1' }}>
+
                 {/* Header */}
                 <Box sx={{ px: 3, pt: 3, pb: 2 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2.5 }}>
                         <Box>
-                            <Typography sx={{
-                                fontFamily: '"Playfair Display", serif',
-                                fontSize: 22, fontWeight: 700, color: '#1a1208',
-                                lineHeight: 1, letterSpacing: '-0.3px',
-                            }}>
+                            <Typography sx={{ fontFamily: '"Playfair Display", serif', fontSize: 22, fontWeight: 700, color: '#1a1208', lineHeight: 1, letterSpacing: '-0.3px' }}>
                                 Messenger Hub
                             </Typography>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.8 }}>
-                                <Typography sx={{ fontSize: 12, color: '#a89880' }}>
-                                    {allChats.length} conversations
-                                </Typography>
+                                <Typography sx={{ fontSize: 12, color: '#a89880' }}>{allChats.length} conversations</Typography>
                                 {totalUnread > 0 && (
                                     <Box sx={{ bgcolor: '#e8470a', borderRadius: 10, px: 1, py: 0.15, fontSize: 10, fontWeight: 700, color: 'white' }}>
                                         {totalUnread > 999 ? '999+' : totalUnread}
@@ -163,8 +213,16 @@ const DashboardPage = () => {
                             </Box>
                         </Box>
                         <Box sx={{ display: 'flex', gap: 0.5 }}>
-                            <Tooltip title="Sync"><IconButton size="small" onClick={handleSync} sx={{ color: '#c4b5a0', width: 30, height: 30, borderRadius: 1.5, '&:hover': { bgcolor: '#f0ebe3', color: '#6b5c48' }, animation: syncing ? 'spin 1s linear infinite' : 'none', '@keyframes spin': { '100%': { transform: 'rotate(360deg)' } } }}><SyncIcon sx={{ fontSize: 15 }} /></IconButton></Tooltip>
-                            <Tooltip title="Logout"><IconButton size="small" onClick={logout} sx={{ color: '#c4b5a0', width: 30, height: 30, borderRadius: 1.5, '&:hover': { bgcolor: '#fde8e0', color: '#e8470a' } }}><LogoutIcon sx={{ fontSize: 15 }} /></IconButton></Tooltip>
+                            <Tooltip title="Sync">
+                                <IconButton size="small" onClick={handleSync} sx={{ color: '#c4b5a0', width: 30, height: 30, borderRadius: 1.5, '&:hover': { bgcolor: '#f0ebe3', color: '#6b5c48' }, animation: syncing ? 'spin 1s linear infinite' : 'none', '@keyframes spin': { '100%': { transform: 'rotate(360deg)' } } }}>
+                                    <SyncIcon sx={{ fontSize: 15 }} />
+                                </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Logout">
+                                <IconButton size="small" onClick={logout} sx={{ color: '#c4b5a0', width: 30, height: 30, borderRadius: 1.5, '&:hover': { bgcolor: '#fde8e0', color: '#e8470a' } }}>
+                                    <LogoutIcon sx={{ fontSize: 15 }} />
+                                </IconButton>
+                            </Tooltip>
                         </Box>
                     </Box>
 
@@ -232,7 +290,13 @@ const DashboardPage = () => {
                     ) : (
                         <List sx={{ p: '4px 0' }}>
                             {allChats.map(chat => (
-                                <ChatListItem key={`${chat.messengerType}-${chat.id}`} chat={chat} isSelected={selectedChat?.id === chat.id} onClick={() => handleSelectChat(chat)} />
+                                <ChatListItem
+                                    key={`${chat.messengerType}-${chat.id}`}
+                                    chat={chat}
+                                    isSelected={selectedChat?.id === chat.id}
+                                    onClick={() => handleSelectChat(chat)}
+                                    onTogglePin={handleTogglePin}
+                                />
                             ))}
                         </List>
                     )}
@@ -240,7 +304,10 @@ const DashboardPage = () => {
             </Box>
 
             {/* Main area */}
-            {selectedChat ? <ChatWindow chat={selectedChat} onClose={() => setSelectedChat(null)} /> : <WelcomeScreen telegramConnected={telegramConnected} slackConnected={slackConnected} />}
+            {selectedChat
+                ? <ChatWindow chat={selectedChat} onClose={() => setSelectedChat(null)} />
+                : <WelcomeScreen telegramConnected={telegramConnected} slackConnected={slackConnected} />
+            }
 
             <TelegramDialog open={openTelegramDialog} onClose={() => setOpenTelegramDialog(false)} step={tgStep} phone={tgPhone} code={tgCode} password={tgPassword} error={tgError} loading={tgLoading} onPhoneChange={setTgPhone} onCodeChange={setTgCode} onPasswordChange={setTgPassword} onSendCode={handleSendCode} onSignIn={handleSignIn} onSignInPassword={handleSignInPassword} />
             <SlackDialog open={openSlackDialog} onClose={() => setOpenSlackDialog(false)} token={slackToken} onTokenChange={setSlackToken} onConnect={handleConnectSlack} loading={slackLoading} error={slackError} />
