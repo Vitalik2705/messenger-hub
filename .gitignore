@@ -1,0 +1,20 @@
+# frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# backend
+backend/target/
+backend/.env
+*.class
+
+# python services
+telegram-service/__pycache__/
+telegram-service/*.session
+telegram-service/.env
+slack-service/__pycache__/
+slack-service/.env
+
+# general
+*.log
+.DS_Store
