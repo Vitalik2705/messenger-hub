@@ -1,6 +1,7 @@
 package com.vitalii.messenger_hub_backend.controller;
 
 import com.vitalii.messenger_hub_backend.model.entity.User;
+import com.vitalii.messenger_hub_backend.service.HybridSearchService;
 import com.vitalii.messenger_hub_backend.service.MessageSearchService;
 import com.vitalii.messenger_hub_backend.service.OllamaClient;
 import com.vitalii.messenger_hub_backend.service.SemanticSearchService;
@@ -14,18 +15,15 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Search over archived history. Results are scoped to the authenticated user's own chats by
- * the query itself, so no id from the request can widen them.
- */
+/** Search over archived history, always scoped to the authenticated user's chats. */
 @RestController
 @RequestMapping("/api/search")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class SearchController {
 
     private final MessageSearchService messageSearchService;
     private final SemanticSearchService semanticSearchService;
+    private final HybridSearchService hybridSearchService;
     private final UserService userService;
 
     @GetMapping("/messages")
@@ -43,11 +41,8 @@ public class SearchController {
     }
 
     /**
-     * Search by meaning instead of by word.
-     *
-     * Kept as a separate route rather than a flag on the one above: the two answer different
-     * questions and return differently shaped confidence — one has a snippet showing what
-     * matched, the other has a similarity and nothing to highlight.
+     * Search by meaning. A separate route: results carry a similarity instead of a highlighted
+     * snippet.
      */
     @GetMapping("/semantic")
     public ResponseEntity<Map<String, Object>> searchSemantic(
@@ -66,6 +61,19 @@ public class SearchController {
             return ResponseEntity.ok(Map.of(
                     "query", query, "results", List.of(), "error", e.getMessage()));
         }
+    }
+
+    /** Both searches at once, merged into one ranking — see HybridSearchService. */
+    @GetMapping("/hybrid")
+    public ResponseEntity<HybridSearchService.Results> searchHybrid(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestParam("q") String query,
+            @RequestParam(value = "messenger", required = false) String messengerType,
+            @RequestParam(value = "limit", required = false) Integer limit) {
+
+        User user = userService.findByEmail(userDetails.getUsername());
+        int effective = Math.max(1, Math.min(limit == null ? 20 : limit, 50));
+        return ResponseEntity.ok(hybridSearchService.search(user.getId(), query, messengerType, effective));
     }
 
     /** How much of the archive is searchable by meaning yet. */

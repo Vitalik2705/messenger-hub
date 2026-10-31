@@ -22,7 +22,6 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/viber")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class ViberController {
 
     private final ViberService viberService;
@@ -100,12 +99,7 @@ public class ViberController {
     }
 
 
-    /**
-     * Sends an attachment — picture, file, or voice recording.
-     *
-     * Validation runs before the messenger is touched, so an oversized or malformed upload
-     * is rejected here rather than surfacing as an obscure failure from Viber.
-     */
+    /** Sends a picture, file or voice recording, validated before Viber is called. */
     @PostMapping("/send-media")
     public ResponseEntity<?> sendMedia(
             @AuthenticationPrincipal UserDetails userDetails,

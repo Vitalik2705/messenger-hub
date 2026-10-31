@@ -22,7 +22,6 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/discord")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class DiscordController {
 
     private final DiscordService discordService;
@@ -100,12 +99,7 @@ public class DiscordController {
     }
 
 
-    /**
-     * Sends an attachment — picture, file, or voice recording.
-     *
-     * Validation runs before the messenger is touched, so an oversized or malformed upload
-     * is rejected here rather than surfacing as an obscure failure from Discord.
-     */
+    /** Sends a picture, file or voice recording, validated before Discord is called. */
     @PostMapping("/send-media")
     public ResponseEntity<?> sendMedia(
             @AuthenticationPrincipal UserDetails userDetails,

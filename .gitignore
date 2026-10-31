@@ -49,3 +49,6 @@ whisper-service/models/
 
 # demo recordings are too large for git; they live next to the slides, not in the repo
 *.mp4
+
+# Search evaluation queries are fragments of private correspondence
+docs/experiments/queries.local.json

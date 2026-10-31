@@ -20,7 +20,6 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/autoreply")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class AutoReplyController {
 
     private final AutoReplyService autoReplyService;
@@ -37,11 +36,8 @@ public class AutoReplyController {
     }
 
     /**
-     * The mode of one chat.
-     *
-     * A separate read rather than a field on ChatDTO: chats are rebuilt from what each
-     * messenger reports on every sync, and this is ours — it has no business travelling
-     * through five services that know nothing about it.
+     * One chat's auto-reply mode, read separately because ChatDTO is rebuilt from the messengers on
+     * every sync.
      */
     @GetMapping("/chats/{chatId}/mode")
     public ResponseEntity<Map<String, String>> mode(@AuthenticationPrincipal UserDetails principal,
@@ -77,12 +73,7 @@ public class AutoReplyController {
 
     public record ResolveRequest(String status) {}
 
-    /**
-     * Records what the user did with a suggestion.
-     *
-     * This is the measurement, not bookkeeping: sent as written, sent after editing, or
-     * dismissed is the only evidence of whether the model is worth its seconds.
-     */
+    /** Records what the user did with a suggestion: sent as written, edited, or dismissed. */
     @PostMapping("/drafts/{id}/resolve")
     public ResponseEntity<Map<String, String>> resolve(@AuthenticationPrincipal UserDetails principal,
                                                        @PathVariable Long id,

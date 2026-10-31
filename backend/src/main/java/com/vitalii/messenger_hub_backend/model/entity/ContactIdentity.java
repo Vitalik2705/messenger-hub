@@ -12,11 +12,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * One way of reaching a person: a single personal chat in a single messenger.
- *
- * Identities are derived from chats rather than entered by hand, because a personal chat is
- * the only place the platform reliably learns a counterpart's name. Group chats are excluded
- * — their name describes the room, not a person.
+ * One way of reaching a person: a personal chat in one messenger. Derived from chats; groups are
+ * excluded because their name describes the room.
  */
 @Entity
 @Table(
@@ -57,9 +54,8 @@ public class ContactIdentity {
     private MessengerType messengerType;
 
     /**
-     * Held as a plain id, not an association: the matcher compares every identity against
-     * every other and only needs to know which account each came from, so a lazy reference
-     * per row would mean a query per row.
+     * A plain id rather than an association: the matcher only needs the account, and a lazy
+     * reference per row would mean a query per row.
      */
     @Column(name = "messenger_account_id", nullable = false)
     private Long messengerAccountId;
@@ -68,8 +64,7 @@ public class ContactIdentity {
     private String externalChatId;
 
     /**
-     * Copied from the chat rather than read through it, so a rename in the messenger cannot
-     * silently change what a past linking decision was based on.
+     * Copied from the chat, so a later rename does not change what a linking decision was based on.
      */
     @Column(name = "display_name")
     private String displayName;

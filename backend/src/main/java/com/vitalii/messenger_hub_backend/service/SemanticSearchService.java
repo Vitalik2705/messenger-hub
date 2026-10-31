@@ -10,6 +10,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.ByteBuffer;
@@ -18,17 +21,11 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Search by meaning rather than by word, entirely on this machine.
+ * Search by meaning, entirely local: "де ми домовлялись про оренду" finds "квартиру беремо з
+ * понеділка".
  *
- * Full-text search finds the messages that used the words you typed. This finds the ones
- * that meant what you meant — "де ми домовлялись про оренду" reaches a message that said
- * "квартиру беремо з понеділка" and never used either word.
- *
- * There is no vector database here and none is needed. pgvector exists to make approximate
- * search fast at millions of rows; one person's archive is tens of thousands, and a full
- * scan over that is a few million multiply-adds — around a millisecond. The index is kept
- * in memory as packed float arrays, topped up rather than rebuilt, and the whole thing is
- * smaller than a single chat's photos.
+ * No vector database: one person's archive is tens of thousands of messages, and a full cosine scan
+ * over in-memory float arrays takes about a millisecond.
  */
 @Service
 @RequiredArgsConstructor
@@ -42,8 +39,9 @@ public class SemanticSearchService {
     private final MessageRepository messageRepository;
     private final OllamaClient ollama;
     private final BackgroundWorkGate gate;
+    private final JdbcTemplate jdbcTemplate;
 
-    @Value("${embeddings.model:nomic-embed-text}")
+    @Value("${embeddings.model:bge-m3}")
     private String model;
 
     @Value("${embeddings.enabled:true}")
@@ -53,14 +51,7 @@ public class SemanticSearchService {
     @Value("${embeddings.batch-size:64}")
     private int batchSize;
 
-    /**
-     * The searchable index, per user.
-     *
-     * Held in memory because the alternative is reading every vector out of the database on
-     * every keystroke — tens of megabytes for a query that should take a millisecond. Built
-     * lazily on first search and appended to as indexing proceeds, so it is never rebuilt
-     * from scratch after the first time.
-     */
+    /** The in-memory index per user, built on first search and appended to as indexing proceeds. */
     private final Map<Long, Index> indexes = new ConcurrentHashMap<>();
 
     private static final class Index {
@@ -76,12 +67,30 @@ public class SemanticSearchService {
     // ── Indexing ──────────────────────────────────────────────────────────────
 
     /**
-     * Embeds a slice of the backlog.
-     *
-     * Runs on a schedule and does a little at a time, exactly like the message archiver:
-     * embedding is CPU work competing with everything else the model does, and a burst that
-     * indexes ten thousand messages at once would make the application unusable while it
-     * ran. A first index of a large archive therefore takes a while — and finishes.
+     * Drops vectors made by other models at startup. A message holds one vector (unique on
+     * message_id) and vectors of different models are not comparable, so after a model switch the
+     * old ones would block re-indexing.
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void dropVectorsOfOtherModels() {
+        if (!enabled) return;
+        try {
+            // One statement, so rows and their bytes go together. The vector is a Postgres
+            // large object; deleting the row alone would leave its bytes behind.
+            int dropped = jdbcTemplate.queryForList(
+                    "DELETE FROM message_embeddings WHERE model <> ? RETURNING lo_unlink(vector)",
+                    model).size();
+            if (dropped > 0) {
+                log.info("Dropped {} vector(s) of other models; re-indexing with {}", dropped, model);
+            }
+        } catch (Exception e) {
+            log.warn("Could not drop vectors of other models: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Embeds a slice of the backlog on a schedule, a little at a time, so indexing never saturates
+     * the CPU.
      */
     @Scheduled(fixedDelayString = "${embeddings.interval-ms:120000}",
             initialDelayString = "${embeddings.initial-delay-ms:120000}")
@@ -102,7 +111,15 @@ public class SemanticSearchService {
 
         for (Long userId : users) {
             try {
-                int done = indexUser(userId, batchSize);
+                // Batch after batch while nobody is using the application: one batch per
+                // tick would take hours over a fresh archive or after a model change. The
+                // moment the user is back, this stops after the batch in hand.
+                int done = 0;
+                int batch;
+                do {
+                    batch = indexUser(userId, batchSize);
+                    done += batch;
+                } while (batch == batchSize && !gate.userIsActive());
                 if (done > 0) log.info("Embedded {} message(s) for user {}", done, userId);
             } catch (OllamaClient.OllamaUnavailableException e) {
                 // Ollama is a process the user controls; stopping quietly and retrying on the
@@ -158,11 +175,8 @@ public class SemanticSearchService {
     }
 
     /**
-     * The nearest messages by meaning, best first.
-     *
-     * Cosine similarity over every vector the user has. Brute force is not a shortcut here —
-     * at this scale it is both the simplest and the fastest correct answer, and it has no
-     * index to build, tune, or keep in step with new messages.
+     * The nearest messages by meaning, best first: brute-force cosine similarity, which at this
+     * scale is the simplest and fastest correct answer.
      */
     @Transactional(readOnly = true)
     public List<MessageSearchResultDTO> search(Long userId, String query, int limit) {
@@ -176,13 +190,18 @@ public class SemanticSearchService {
         float[] needle = normalise(queryVectors.get(0));
 
         PriorityQueue<Hit> best = new PriorityQueue<>(Comparator.comparingDouble(Hit::score));
-        for (int i = 0; i < index.vectors.size(); i++) {
-            double score = dot(needle, index.vectors.get(i));
-            if (best.size() < limit) {
-                best.add(new Hit(index.ids.get(i)[1], index.ids.get(i)[2], score));
-            } else if (score > best.peek().score()) {
-                best.poll();
-                best.add(new Hit(index.ids.get(i)[1], index.ids.get(i)[2], score));
+        // Under the same lock refresh() appends with: a second search by the same user can
+        // grow these lists mid-scan, and ArrayList gives no guarantees to a reader racing a
+        // writer. The scan is milliseconds; the embedding call above stays outside the lock.
+        synchronized (index) {
+            for (int i = 0; i < index.vectors.size(); i++) {
+                double score = dot(needle, index.vectors.get(i));
+                if (best.size() < limit) {
+                    best.add(new Hit(index.ids.get(i)[1], index.ids.get(i)[2], score));
+                } else if (score > best.peek().score()) {
+                    best.poll();
+                    best.add(new Hit(index.ids.get(i)[1], index.ids.get(i)[2], score));
+                }
             }
         }
 

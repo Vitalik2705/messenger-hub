@@ -18,15 +18,12 @@ import org.springframework.web.bind.annotation.*;
 import java.util.*;
 
 /**
- * Chat analysis: request one, watch it run, read the history.
- *
- * Every route resolves the caller from the token and never trusts a user id from the body,
- * so a run id belonging to somebody else resolves to a 403 rather than to their data.
+ * Chat analysis: start a run, follow it, read the history. The caller always comes from the token,
+ * so another user's run id gives 403.
  */
 @RestController
 @RequestMapping("/api/analysis")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 @Slf4j
 public class AnalysisController {
 
@@ -171,11 +168,8 @@ public class AnalysisController {
     }
 
     /**
-     * Unpacks stored JSON into real structure.
-     *
-     * The model's half is parsed defensively: `format: json` makes malformed output rare,
-     * not impossible, and one bad generation must not make the whole history page fail to
-     * load. Unparseable output is surfaced as raw text instead.
+     * Unpacks stored JSON. The model's part is parsed defensively and returned as raw text if
+     * malformed.
      */
     private Object parse(String json) {
         if (json == null || json.isBlank()) return null;

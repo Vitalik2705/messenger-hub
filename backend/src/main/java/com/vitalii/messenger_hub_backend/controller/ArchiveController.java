@@ -27,25 +27,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-/**
- * Reports how much conversation history has accumulated locally.
- * Used to confirm the archive is growing and to describe the corpus later on.
- */
+/** How much history has been archived locally. */
 @RestController
 @RequestMapping("/api/archive")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 @Slf4j
 public class ArchiveController {
 
     /** More than a screenful, but bounded so a crafted limit cannot pull a whole chat. */
     private static final int MAX_LIMIT = 200;
 
-    /**
-     * Own instance rather than an injected bean: the application context does not publish
-     * an ObjectMapper, and this reads a flat summary written by the archiver itself, so it
-     * needs none of the application's serialisation settings.
-     */
+    /** A local mapper: it only reads a flat summary written by the archiver. */
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private final MessageRepository messageRepository;
@@ -53,16 +45,9 @@ public class ArchiveController {
     private final UserService userService;
 
     /**
-     * The locally archived history of one chat, oldest first.
-     *
-     * This exists to make opening a chat instant. The messenger APIs are the source of
-     * truth but are seconds away over the network, so the client renders this first and
-     * reconciles with the live fetch when it lands. A chat that has never been archived
-     * returns an empty list, which the client treats as "no shortcut available" rather
-     * than "no messages".
-     *
-     * Media is deliberately absent: only the fact of an attachment is archived, so the
-     * placeholder renders immediately and the payload is fetched on demand.
+     * The archived history of one chat, oldest first, so a chat opens instantly while the live
+     * fetch runs. Empty for a never-archived chat. Media payloads are not archived, only the fact
+     * of an attachment.
      */
     @GetMapping("/messages")
     public ResponseEntity<List<MessageDTO>> messages(
@@ -121,12 +106,8 @@ public class ArchiveController {
     }
 
     /**
-     * Transcripts for one chat, as a map from the messenger's message id to text.
-     *
-     * A separate call rather than a field on every message: the chat window shows live
-     * messages fetched straight from the messenger, which know nothing about a transcript
-     * computed here, and merging by id survives the switch between cached, archived and
-     * live copies of the same conversation.
+     * Transcripts of one chat as a map from the messenger's message id to text, which the client
+     * merges into whatever copy of the chat it shows.
      */
     @GetMapping("/transcripts")
     public ResponseEntity<Map<String, String>> transcripts(

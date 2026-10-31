@@ -12,10 +12,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Search across the archived corpus — every messenger at once, which is the whole point of
- * aggregating them in one place. Telegram cannot search your Slack history; this can.
- */
+/** Full-text search over the archive of every connected messenger at once. */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -90,16 +87,10 @@ public class MessageSearchService {
     }
 
     /**
-     * Turns what the user typed into a {@code tsquery}.
-     *
-     * Every term becomes a prefix match. Without stemming — and Postgres has no Ukrainian
-     * stemmer — an exact-token search would miss every inflected form: "зустріч" would not
-     * find "зустрічі". Prefix matching recovers most of that, and it also makes the box
-     * usable while the user is still typing.
-     *
-     * Sanitising to letters and digits is what makes the result safe to interpolate: no
-     * token can carry {@code &}, {@code |}, {@code !}, {@code :} or parentheses, so nothing
-     * the user types can alter the query's structure or make {@code to_tsquery} raise.
+     * Turns user input into a tsquery. Every term becomes a prefix match, which recovers most
+     * inflected forms without a Ukrainian stemmer ("зустріч" finds "зустрічі") and works while
+     * typing. Terms are reduced to letters and digits, so input cannot change the query structure
+     * or make to_tsquery fail.
      *
      * @return a tsquery expression, or null if nothing searchable remained
      */

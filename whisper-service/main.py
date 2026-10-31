@@ -13,6 +13,7 @@ the people who recorded it never agreed to have their voices uploaded anywhere.
 import base64
 import os
 import tempfile
+import threading
 import time
 from typing import Optional
 
@@ -30,7 +31,12 @@ MODEL_SIZE = os.getenv("WHISPER_MODEL", "small")
 COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE", "int8")
 DEFAULT_LANGUAGE = os.getenv("WHISPER_LANGUAGE", "uk")
 
+# Threads CTranslate2 may use. 0 lets it choose, which on a many-core machine is fewer
+# than it could use; the backend sends one clip at a time, so this service can have them.
+CPU_THREADS = int(os.getenv("WHISPER_THREADS", "0"))
+
 _model = None
+_model_lock = threading.Lock()
 
 
 def get_model():
@@ -42,13 +48,30 @@ def get_model():
     a voice message actually arrives.
     """
     global _model
-    if _model is None:
-        from faster_whisper import WhisperModel
-        print(f"Loading Whisper model '{MODEL_SIZE}' ({COMPUTE_TYPE})…", flush=True)
-        started = time.time()
-        _model = WhisperModel(MODEL_SIZE, device="cpu", compute_type=COMPUTE_TYPE)
-        print(f"Model ready in {time.time() - started:.1f}s", flush=True)
+    # Locked: the startup preload and a first request can arrive together, and loading
+    # the model twice doubles both the wait and the memory.
+    with _model_lock:
+        if _model is None:
+            from faster_whisper import WhisperModel
+            print(f"Loading Whisper model '{MODEL_SIZE}' ({COMPUTE_TYPE})…", flush=True)
+            started = time.time()
+            _model = WhisperModel(MODEL_SIZE, device="cpu", compute_type=COMPUTE_TYPE,
+                                  cpu_threads=CPU_THREADS)
+            print(f"Model ready in {time.time() - started:.1f}s", flush=True)
     return _model
+
+
+@app.on_event("startup")
+def preload_model():
+    """
+    Loads the model in the background as soon as the service is up.
+
+    Lazily, the first person to press "transcribe" paid for it: well over a minute the very
+    first time (download included), several seconds after every restart. Started on a
+    thread, so the service still answers /health at once instead of looking hung.
+    """
+    if os.getenv("WHISPER_PRELOAD", "1") == "1":
+        threading.Thread(target=get_model, daemon=True).start()
 
 
 # ── API ──────────────────────────────────────────────────────────────────────
@@ -81,8 +104,11 @@ async def health():
     }
 
 
+# A plain `def`, not `async def`: FastAPI then runs it on a worker thread. As a coroutine
+# the CPU-bound model call ran on the event loop and froze the whole service — /health
+# included — for as long as it took.
 @app.post("/transcribe", response_model=TranscribeResponse)
-async def transcribe(request: TranscribeRequest):
+def transcribe(request: TranscribeRequest):
     try:
         audio = base64.b64decode(request.audio_base64)
     except Exception:

@@ -57,14 +57,8 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
     List<Object[]> findMediaRoute(@Param("messageId") Long messageId);
 
     /**
-     * Chats of the given kinds that received something in a window, busiest first.
-     *
-     * Counts only what came in: a digest is about what arrived, and messages the user sent
-     * themselves are not news to them.
-     *
-     * Chats archived before {@code chat_kind} existed have none, so the coarse chat type
-     * stands in for them — the same fallback {@code ChatKind.parse} applies, kept here so a
-     * pre-upgrade chat is filtered rather than silently dropped by an IN over NULL.
+     * Chats of the given kinds with incoming messages in a window, busiest first. Chats without
+     * chat_kind fall back to the coarse chat type, as ChatKind.parse does.
      */
     @Query(value = """
             SELECT c.id, c.name, a.messenger_type, count(*) AS incoming,
@@ -112,10 +106,8 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
     List<Object[]> findTranscripts(@Param("chatId") Long chatId);
 
     /**
-     * Voice messages that have not been transcribed yet, newest first.
-     *
-     * Media is not archived, so the audio has to be re-fetched from the messenger for each
-     * of these — which is why the batch is small and the job is slow.
+     * Untranscribed voice messages, newest first. The audio must be re-fetched from the messenger
+     * for each.
      */
     @Query(value = """
             SELECT m.id, m.external_message_id, c.external_chat_id, c.messenger_account_id
@@ -148,10 +140,8 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
     long countTranscribed(@Param("userId") Long userId);
 
     /**
-     * Removes an archived copy after the message was deleted in the messenger.
-     *
-     * Without this the archive would quietly outlive the deletion: the message would stay
-     * searchable and keep being pushed over WebSocket, which turns "delete" into "hide".
+     * Removes the archived copy of a message deleted in the messenger, so it stops appearing in
+     * search.
      */
     @Modifying
     @Transactional
@@ -159,6 +149,14 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
             "and m.externalMessageId = :externalMessageId")
     int deleteArchived(@Param("chatId") Long chatId,
                        @Param("externalMessageId") String externalMessageId);
+
+    @Modifying
+    @Transactional
+    @Query("update Message m set m.text = :text where m.chat.id = :chatId " +
+            "and m.externalMessageId = :externalMessageId")
+    int updateArchivedText(@Param("chatId") Long chatId,
+                           @Param("externalMessageId") String externalMessageId,
+                           @Param("text") String text);
 
     // ── Corpus statistics ─────────────────────────────────────────────────────
 
@@ -181,18 +179,13 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
     // ── Full-text search ──────────────────────────────────────────────────────
 
     /**
-     * Ranked search across everything the user has archived, in every messenger at once.
+     * Ranked full-text search over everything the user has archived.
+     * Columns, in order: id, chatId, chatName, messengerType, senderName, isFromUser, timestamp,
+     * text, snippet, rank.
      *
-     * Columns, in order: id, chatId, chatName, messengerType, senderName, isFromUser,
-     * timestamp, text, snippet, rank.
-     *
-     * The query is native because {@code tsvector}, {@code ts_rank_cd} and
-     * {@code ts_headline} have no JPQL equivalent. {@code :tsquery} is not raw user input —
-     * {@link com.vitalii.messenger_hub_backend.service.MessageSearchService} builds it from
-     * sanitised tokens, since {@code to_tsquery} raises on malformed syntax.
-     *
-     * Every optional filter is cast explicitly: an untyped NULL bind leaves Postgres unable
-     * to infer the parameter's type and the statement fails to plan.
+     * Native, because tsvector, ts_rank_cd and ts_headline have no JPQL equivalent. :tsquery is
+     * built by MessageSearchService from sanitised tokens. Optional filters are cast explicitly,
+     * since an untyped NULL bind fails to plan.
      */
     @Query(value = """
             SELECT m.id,

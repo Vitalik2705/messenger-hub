@@ -237,11 +237,8 @@ public class SlackService {
     }
 
     /**
-     * Uploads an attachment to a channel.
-     *
-     * Slack has no voice-note concept: a recording arrives as an audio file, and its own
-     * player handles it from there. The kind still travels along so the file gets a
-     * sensible name rather than "blob".
+     * Uploads an attachment. Slack has no voice-note type; recordings are sent as audio files,
+     * named by their kind.
      */
     public void sendMedia(Long userId, String channelId,
                           MediaUploadValidator.ValidatedMedia media, Long accountId) {
@@ -260,12 +257,7 @@ public class SlackService {
 
     // ── DELETE ────────────────────────────────────────────────────────────────
 
-    /**
-     * Deletes a message for everyone, then drops the archived copy.
-     *
-     * Order matters: if Slack refuses the deletion the local copy is still the truth,
-     * so the archive is only cleaned once the messenger has confirmed.
-     */
+    /** Deletes a message for everyone, and the archived copy only after Slack confirms. */
     public void deleteMessage(Long userId, String channelId, String messageId, Long accountId) {
         MessengerAccount account = accountId != null
                 ? resolveAccount(userId, accountId)

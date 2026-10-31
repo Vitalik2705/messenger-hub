@@ -107,8 +107,8 @@ async def get_chats(x_token: str = Header(...)):
                     "id": channel_id,
                     "name": f"{guild_name} / #{channel_name}",
                     "type": "GROUP",
-                    # 5 = GUILD_ANNOUNCEMENT: мовить в один бік, як канал Telegram.
-                    # 0 = GUILD_TEXT: звичайна розмова.
+                    # 5 = GUILD_ANNOUNCEMENT: one-way, like a Telegram channel.
+                    # 0 = GUILD_TEXT: an ordinary conversation.
                     "kind": "CHANNEL" if channel.get("type") == 5 else "GROUP",
                     "last_message": last_message,
                     "last_message_at": last_message_at,
@@ -171,7 +171,7 @@ async def delete_message(req: DeleteMessageRequest):
             f"{DISCORD_API}/channels/{req.channel_id}/messages/{req.message_id}",
             headers=make_headers(req.token),
         )
-        # 204 — видалено, 404 — його вже немає, що для видалення той самий результат.
+        # 204 deleted, 404 already gone — the same outcome for a delete.
         if r.status_code not in (200, 204, 404):
             raise HTTPException(status_code=400, detail=r.text)
         return {"success": True}
@@ -179,12 +179,7 @@ async def delete_message(req: DeleteMessageRequest):
 
 @app.post("/send-media")
 async def send_media(req: SendMediaRequest):
-    """Надсилає вкладення в канал.
-
-    Discord приймає будь-який файл і сам програє аудіо в стрічці, тож окремої
-    обробки для голосових не потрібно — на відміну від Telegram, тут немає
-    окремого типу «голосове», під який треба підлаштовуватись.
-    """
+    """Uploads an attachment. Discord plays audio inline, so voice notes need no special handling."""
     try:
         raw = base64.b64decode(req.data_base64)
     except Exception:
@@ -192,7 +187,7 @@ async def send_media(req: SendMediaRequest):
     if not raw:
         raise HTTPException(status_code=400, detail="Порожнє вкладення")
 
-    # multipart, а не JSON: сам файл іде окремою частиною, а payload_json несе текст.
+    # multipart, not JSON: the file is its own part and payload_json carries the text.
     headers = make_headers(req.token)
     headers.pop("Content-Type", None)  # httpx виставить свій boundary
 

@@ -11,17 +11,9 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * One analysis of one chat, kept forever.
- *
- * A run is stored rather than recomputed because it is not reproducible: it describes the
- * conversation as it stood at a moment in time, and it cost real seconds of local inference
- * to produce. Keeping every run also makes the history page possible — the user compares
- * what a chat looked like in March against what it looks like now, which no live query
- * over the current archive could ever answer.
- *
- * The settings are stored on the run, not in a separate profile: the only honest way to
- * read a result is against the exact configuration that produced it, including which model
- * wrote it.
+ * One analysis of one chat, kept permanently: it describes the conversation at a point in time and
+ * cannot be reproduced later. The settings, including the model, are stored on the run so the
+ * result can be read against them.
  */
 @Entity
 @Table(
@@ -49,12 +41,7 @@ public class AnalysisRun {
     @JoinColumn(name = "chat_id", nullable = false)
     private Chat chat;
 
-    /**
-     * The chat's name at the time of the run.
-     *
-     * Copied rather than read through the relation so the history stays readable after a
-     * counterpart renames themselves — or after the chat is gone from the messenger.
-     */
+    /** The chat's name at the time of the run, so history stays readable after renames. */
     @Column(name = "chat_name")
     private String chatName;
 
@@ -71,11 +58,8 @@ public class AnalysisRun {
     private String model;
 
     /**
-     * Ties runs of the same chat launched together on different models.
-     *
-     * Separate rows rather than one row with two results: each model has its own duration,
-     * its own failure, its own output, and flattening them into one record would lose
-     * exactly the differences the comparison exists to show.
+     * Groups runs of one chat launched together on different models; each keeps its own timing,
+     * failure and output.
      */
     @Column(name = "comparison_id", length = 40)
     private String comparisonId;
@@ -97,12 +81,8 @@ public class AnalysisRun {
     private String insightsJson;
 
     /**
-     * Answers to the user's own questions, as a JSON array.
-     *
-     * Each entry carries the question's name and text alongside the answer rather than a
-     * reference to the prompt row. A stored result has to stay readable after its prompt is
-     * reworded or deleted — otherwise the history would quietly start attributing old
-     * answers to a question nobody asked.
+     * Answers to the user's questions as a JSON array. Each entry carries the question's text, so
+     * it stays readable after the prompt is edited or deleted.
      */
     @Column(name = "custom_json", columnDefinition = "TEXT")
     private String customJson;

@@ -1,6 +1,5 @@
 package com.vitalii.messenger_hub_backend.security;
 
-import com.vitalii.messenger_hub_backend.service.UserService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -9,7 +8,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -43,9 +41,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String email = jwtUtil.extractEmail(jwt);
 
             if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+                AppUserDetails userDetails = userDetailsService.loadUserByUsername(email);
 
-                if (jwtUtil.validateToken(jwt, email)) {
+                if (jwtUtil.validateToken(jwt, userDetails)) {
                     UsernamePasswordAuthenticationToken authToken =
                             new UsernamePasswordAuthenticationToken(
                                     userDetails,
@@ -61,6 +59,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     log.debug("User {} authenticated successfully", email);
                 }
             }
+        } catch (io.jsonwebtoken.ExpiredJwtException e) {
+            // Routine: the client refreshes its token on the 401 that follows.
+            log.debug("JWT expired: {}", e.getMessage());
         } catch (Exception e) {
             log.error("Cannot set user authentication: {}", e.getMessage());
         }

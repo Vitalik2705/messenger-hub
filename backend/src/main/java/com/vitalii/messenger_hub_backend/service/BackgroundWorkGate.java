@@ -4,29 +4,19 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * Lets background work happen only when it is not in the user's way.
- *
- * Three jobs grew up independently — archiving, embedding, transcribing — each on its own
- * schedule, each reasonable alone. Together they saturated the machine: transcription runs
- * at roughly real time, so five clips every two minutes never finished before the next tick
- * started, while embedding held Ollama and archiving held the same Telegram connection the
- * chat list needs. The application spent its time competing with itself.
- *
- * Two rules fix it, and both are about priority rather than speed:
- *
+ * Lets background jobs (archiving, embedding, transcription) run only when they are not in the
+ * user's way:
  * <ul>
- *   <li>only one background job at a time — they share one CPU and one connection per
- *       messenger, so running two makes each slower rather than the pair faster;</li>
- *   <li>nothing starts while the user is doing something — a person waiting for a chat to
- *       open outranks an archive that has all night.</li>
+ * <li>one job at a time — they share the CPU and the messenger connections;</li>
+ * <li>nothing starts while the user is active.</li>
  * </ul>
- *
- * Skipping a tick costs nothing: every one of these jobs is a backlog drain that will be
- * offered the same work again in a minute.
+ * A skipped tick costs nothing: each job drains a backlog and gets the same work next time.
  */
 @Service
 @Slf4j
@@ -37,12 +27,13 @@ public class BackgroundWorkGate {
 
     private final AtomicLong lastUserRequest = new AtomicLong(0);
 
+    /** For the system status panel: what is running now, and when each job last ran. */
+    private volatile String running;
+    private final Map<String, Long> lastRuns = new ConcurrentHashMap<>();
+
     /**
-     * How recently the user has to have done something for background work to stand aside.
-     *
-     * Generous on purpose. The chat list polls every 25 seconds, so a shorter window would
-     * treat an idle open tab as an active user and never let anything run; a longer one
-     * would keep working through a burst of clicks.
+     * How long after the last user request background work stays paused. Longer than the chat
+     * list's 25-second poll so an idle open tab does not count as activity.
      */
     @Value("${background.user-quiet-ms:20000}")
     private long quietMillis;
@@ -71,10 +62,22 @@ public class BackgroundWorkGate {
             return false;
         }
         try {
+            running = name;
             work.run();
             return true;
         } finally {
+            running = null;
+            lastRuns.put(name, System.currentTimeMillis());
             lock.unlock();
         }
+    }
+
+    public String runningJob() {
+        return running;
+    }
+
+    /** Job name → epoch millis of its last finished run. */
+    public Map<String, Long> lastRuns() {
+        return Map.copyOf(lastRuns);
     }
 }

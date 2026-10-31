@@ -8,12 +8,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 /**
- * Runs once at startup to apply schema migrations that Hibernate cannot handle
- * automatically (e.g., dropping a unique constraint, adding optional columns).
- *
- * Ordered after {@code entityManagerFactory} so that ddl-auto has already created any
- * missing tables — otherwise the very first run against an empty database would try to
- * alter tables that do not exist yet.
+ * Schema changes Hibernate's ddl-auto cannot make, applied once at startup after the entity manager
+ * has created any missing tables.
  */
 @Service
 @DependsOn("entityManagerFactory")
@@ -29,14 +25,47 @@ public class DatabaseMigrationService {
         addAccountLabelColumnIfMissing();
         addChatKindColumnIfMissing();
         addMessageSearchIndexIfMissing();
+        addChatLookupIndexesIfMissing();
+        dropOversizedAvatars();
     }
 
     /**
-     * What is on the other side of each chat — person, bot, channel, group, service.
-     *
-     * Left null for rows synced before the column existed; the next sync fills it in from
-     * what the messenger reports, and everything reading it treats null as "not yet known"
-     * rather than assuming a value.
+     * Clears full-size avatars stored by older versions so the client refetches them at 160 px. A
+     * no-op once they are gone.
+     */
+    private void dropOversizedAvatars() {
+        try {
+            int cleared = jdbcTemplate.update(
+                "UPDATE chats SET avatar_base64 = NULL WHERE length(avatar_base64) > 40000");
+            if (cleared > 0) log.info("DB migration: cleared {} full-size avatar(s) for re-fetch", cleared);
+        } catch (Exception e) {
+            log.warn("DB migration (oversized avatars) skipped: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Indexes for looking chats up by account and external id, which nearly every sync and archive
+     * path does.
+     */
+    private void addChatLookupIndexesIfMissing() {
+        try {
+            jdbcTemplate.execute(
+                "CREATE INDEX IF NOT EXISTS idx_chats_account_external " +
+                "ON chats (messenger_account_id, external_chat_id);"
+            );
+            jdbcTemplate.execute(
+                "CREATE INDEX IF NOT EXISTS idx_chats_user_external " +
+                "ON chats (user_id, external_chat_id);"
+            );
+            log.info("DB migration: chat lookup indexes ensured");
+        } catch (Exception e) {
+            log.warn("DB migration (chat lookup indexes) skipped: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * The kind of chat (person, bot, channel, group, service). Null for rows synced before the
+     * column existed until the next sync fills it.
      */
     private void addChatKindColumnIfMissing() {
         try {
@@ -78,16 +107,11 @@ public class DatabaseMigrationService {
     }
 
     /**
-     * Full-text search over the archived corpus.
+     * Full-text search column. GENERATED, so Postgres keeps it current; unmapped in Message because
+     * it cannot be written.
      *
-     * The column is GENERATED, so Postgres keeps it in step with every insert and update on
-     * its own — nothing in the application has to remember to reindex. It stays unmapped in
-     * {@code Message} for the same reason: a generated column cannot be written to.
-     *
-     * The 'simple' configuration is deliberate. Postgres ships no Ukrainian dictionary, and
-     * picking 'english' would stem Latin words while mangling nothing else useful — worse
-     * than no stemming at all on a corpus that mixes languages. Recall is recovered at query
-     * time instead, by turning search terms into prefix matches.
+     * The 'simple' configuration: Postgres has no Ukrainian dictionary, and 'english' would only
+     * stem Latin words. Recall is recovered at query time with prefix matching.
      */
     private void addMessageSearchIndexIfMissing() {
         try {

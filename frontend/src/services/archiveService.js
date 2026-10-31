@@ -5,11 +5,8 @@ const archiveService = {
     getStats: () => api.get('/archive/stats'),
 
     /**
-     * Locally archived history for one chat, oldest first.
-     *
-     * Answers from Postgres rather than the messenger, so it returns in milliseconds and
-     * is what a chat renders from while the live fetch is still in flight. Returns an
-     * empty list for a chat that has never been archived.
+     * Archived history of one chat from Postgres, oldest first. Fast, so the chat renders from it
+     * while the live fetch runs; empty for a chat never archived.
      */
     getMessages: (accountId, externalChatId, limit = 50) =>
         api.get('/archive/messages', { params: { accountId, externalChatId, limit } })

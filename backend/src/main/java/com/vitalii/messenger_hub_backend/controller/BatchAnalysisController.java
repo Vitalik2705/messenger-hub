@@ -17,7 +17,6 @@ import java.util.*;
 @RestController
 @RequestMapping("/api/analysis/batches")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 @Slf4j
 public class BatchAnalysisController {
 

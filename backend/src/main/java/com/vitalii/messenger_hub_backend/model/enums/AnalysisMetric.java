@@ -1,12 +1,8 @@
 package com.vitalii.messenger_hub_backend.model.enums;
 
 /**
- * The measurable questions an analysis can be asked to answer.
- *
- * These are computed from the archived messages with plain arithmetic — no model is involved
- * and none is needed. They are exact, they are reproducible, and they run over the whole
- * archive in milliseconds, which is what makes it affordable to decide *afterwards* which
- * few chats are worth the cost of a language model.
+ * Metrics computed from archived messages with plain arithmetic, no model: exact, reproducible, and
+ * fast enough to run on the whole archive before choosing which chats the model reads.
  */
 public enum AnalysisMetric {
 
@@ -31,12 +27,7 @@ public enum AnalysisMetric {
     /** Whether the exchange is growing or fading, as a per-week slope. */
     TREND("Динаміка"),
 
-    /**
-     * Whether the other side is still waiting for an answer, and for how long.
-     *
-     * The one metric that is about now rather than about history — and the only thing here
-     * that changes on its own between two runs of the same chat.
-     */
+    /** Whether the other side is still waiting for an answer, and for how long. */
     DEBT("Без відповіді");
 
     private final String label;

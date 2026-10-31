@@ -14,8 +14,6 @@ const analysisService = {
     /** Every run, or just one chat's, newest first. */
     getRuns: (chatId) => api.get('/analysis/runs', { params: chatId ? { chatId } : {} }),
 
-    getRun: (id) => api.get(`/analysis/runs/${id}`),
-
     remove: (id) => api.delete(`/analysis/runs/${id}`),
 
     /** The user's own questions, reusable across chats. */
@@ -35,8 +33,6 @@ const analysisService = {
     startBatch: (request) => api.post('/analysis/batches', request),
 
     getBatches: () => api.get('/analysis/batches'),
-
-    getBatch: (id) => api.get(`/analysis/batches/${id}`),
 
     removeBatch: (id) => api.delete(`/analysis/batches/${id}`),
 };

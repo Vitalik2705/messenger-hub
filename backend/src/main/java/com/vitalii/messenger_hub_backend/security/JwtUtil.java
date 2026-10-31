@@ -2,12 +2,13 @@ package com.vitalii.messenger_hub_backend.security;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -50,10 +51,6 @@ public class JwtUtil {
                 .getPayload();
     }
 
-    private Boolean isTokenExpired(String token) {
-        return extractExpiration(token).before(new Date());
-    }
-
     public String generateAccessToken(String email, Long userId) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);
@@ -70,12 +67,23 @@ public class JwtUtil {
                 .subject(subject)
                 .issuedAt(new Date(System.currentTimeMillis()))
                 .expiration(new Date(System.currentTimeMillis() + expiration))
-                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+                .signWith(getSigningKey())
                 .compact();
     }
 
-    public Boolean validateToken(String token, String email) {
-        final String extractedEmail = extractEmail(token);
-        return (extractedEmail.equals(email) && !isTokenExpired(token));
+    /**
+     * A token is good if it names this user, has not expired, and was issued no earlier than
+     * the user's last credentials change. `iat` has one-second precision, so the change time
+     * is compared at the same precision — a token issued in the same second still counts.
+     */
+    public boolean validateToken(String token, String email, Instant credentialsChangedAt) {
+        Claims claims = extractAllClaims(token);
+        if (!email.equals(claims.getSubject()) || claims.getExpiration().before(new Date())) return false;
+        return credentialsChangedAt == null
+                || !claims.getIssuedAt().toInstant().isBefore(credentialsChangedAt.truncatedTo(ChronoUnit.SECONDS));
+    }
+
+    public boolean validateToken(String token, AppUserDetails user) {
+        return validateToken(token, user.getUsername(), user.getCredentialsChangedAt());
     }
 }

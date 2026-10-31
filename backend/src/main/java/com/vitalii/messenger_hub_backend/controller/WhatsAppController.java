@@ -22,7 +22,6 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/whatsapp")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class WhatsAppController {
 
     private final WhatsAppService whatsAppService;
@@ -101,12 +100,7 @@ public class WhatsAppController {
     }
 
 
-    /**
-     * Sends an attachment — picture, file, or voice recording.
-     *
-     * Validation runs before the messenger is touched, so an oversized or malformed upload
-     * is rejected here rather than surfacing as an obscure failure from WhatsApp.
-     */
+    /** Sends a picture, file or voice recording, validated before WhatsApp is called. */
     @PostMapping("/send-media")
     public ResponseEntity<?> sendMedia(
             @AuthenticationPrincipal UserDetails userDetails,

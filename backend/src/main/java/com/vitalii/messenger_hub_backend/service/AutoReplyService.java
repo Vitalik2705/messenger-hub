@@ -21,17 +21,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 /**
- * Writes replies on the user's behalf, as far as each chat allows.
- *
- * Three behaviours share one pipeline because they differ only at the last step: DRAFT
- * stops before sending, AUTO_LABELED sends with a line saying what wrote it, AUTO sends
- * without one. Everything before that — deciding whether to write at all, gathering
- * context, generating — is identical, and splitting it would guarantee the safety checks
- * eventually differ between modes.
- *
- * Most of this class is the deciding. Generating text is one call; knowing when not to is
- * the part that keeps a language model from answering its own message forty times in a row
- * under somebody's name.
+ * Writes replies on the user's behalf, as far as each chat allows. The three modes share one
+ * pipeline and differ only at the end: DRAFT stops before sending, AUTO_LABELED sends with a note,
+ * AUTO sends without one. Most of the class decides whether to reply at all.
  */
 @Service
 @RequiredArgsConstructor
@@ -42,11 +34,8 @@ public class AutoReplyService {
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("dd.MM HH:mm");
 
     /**
-     * The reply, and nothing else.
-     *
-     * A small model asked for a message tends to return the message wrapped in commentary —
-     * "Ось варіант відповіді:" — which would be sent verbatim in the automatic modes. JSON
-     * with one field is the cheapest way to make that impossible.
+     * The reply alone, as a JSON field, so commentary like "Ось варіант відповіді:" can never be
+     * sent.
      */
     private static final String SYSTEM = """
             Ти пишеш відповідь у приватному листуванні ВІД ІМЕНІ користувача.
@@ -178,10 +167,8 @@ public class AutoReplyService {
     // ── Generation ────────────────────────────────────────────────────────────
 
     /**
-     * Decides whether this chat should get a reply right now, and produces one if so.
-     *
-     * Called off the request thread, after new messages have been archived. Every early
-     * return here is a guard that has to hold for all three modes at once.
+     * Decides whether this chat should get a reply now and produces one if so. Runs off the request
+     * thread after new messages are archived; each early return is a guard for all modes.
      */
     @Transactional
     public void considerReplying(Long chatId) {
@@ -300,13 +287,7 @@ public class AutoReplyService {
         return Math.floorMod(hour, 24);
     }
 
-    /**
-     * Whether now falls inside the quiet window.
-     *
-     * The window normally crosses midnight — 23:00 to 08:00 — so the two ends cannot simply
-     * be compared. When `from` is the later hour the window wraps, and the test flips from
-     * "between them" to "outside them".
-     */
+    /** Whether now is in the quiet window, which may wrap past midnight (e.g. 23:00–08:00). */
     private boolean inQuietHours(AutoReplySettings settings) {
         Integer from = settings.getQuietFromHour();
         Integer to = settings.getQuietToHour();

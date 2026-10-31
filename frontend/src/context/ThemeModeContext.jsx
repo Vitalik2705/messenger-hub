@@ -3,8 +3,13 @@ import { ThemeProvider, CssBaseline } from '@mui/material';
 import buildTheme from '../theme';
 
 const STORAGE_KEY = 'themeMode';
+const ACCENT_KEY = 'themeAccent';
+const BUBBLES_KEY = 'themeBubbles';
 
-const ThemeModeContext = createContext({ mode: 'light', toggleMode: () => {} });
+const ThemeModeContext = createContext({
+    mode: 'light', toggleMode: () => {}, setMode: () => {},
+    accent: 'coral', setAccent: () => {}, bubbles: 'filled', setBubbles: () => {},
+});
 
 export const useThemeMode = () => useContext(ThemeModeContext);
 
@@ -15,35 +20,50 @@ function preferredMode() {
 }
 
 /**
- * Owns the light/dark choice for the whole app.
- *
- * An explicit choice is remembered and wins from then on; until the user makes one the app
- * follows the system and keeps following it, so someone whose machine switches at dusk
- * does not have to switch here too.
+ * Light/dark mode, accent and bubble style. Follows the system until the user chooses explicitly;
+ * the choice is remembered.
  */
 export function ThemeModeProvider({ children }) {
-    const [mode, setMode] = useState(preferredMode);
+    const [mode, setModeState] = useState(preferredMode);
+    const [accent, setAccentState] = useState(() => localStorage.getItem(ACCENT_KEY) || 'coral');
+    const [bubbles, setBubblesState] = useState(() => localStorage.getItem(BUBBLES_KEY) || 'filled');
 
     useEffect(() => {
         const media = window.matchMedia?.('(prefers-color-scheme: dark)');
         if (!media) return;
         const follow = (event) => {
-            if (!localStorage.getItem(STORAGE_KEY)) setMode(event.matches ? 'dark' : 'light');
+            if (!localStorage.getItem(STORAGE_KEY)) setModeState(event.matches ? 'dark' : 'light');
         };
         media.addEventListener('change', follow);
         return () => media.removeEventListener('change', follow);
     }, []);
 
     const toggleMode = useCallback(() => {
-        setMode((current) => {
+        setModeState((current) => {
             const next = current === 'dark' ? 'light' : 'dark';
             localStorage.setItem(STORAGE_KEY, next);
             return next;
         });
     }, []);
 
-    const theme = useMemo(() => buildTheme(mode), [mode]);
-    const value = useMemo(() => ({ mode, toggleMode }), [mode, toggleMode]);
+    const setMode = useCallback((next) => {
+        localStorage.setItem(STORAGE_KEY, next);
+        setModeState(next);
+    }, []);
+    const setAccent = useCallback((next) => {
+        localStorage.setItem(ACCENT_KEY, next);
+        setAccentState(next);
+    }, []);
+    const setBubbles = useCallback((next) => {
+        localStorage.setItem(BUBBLES_KEY, next);
+        setBubblesState(next);
+    }, []);
+
+    const theme = useMemo(() => buildTheme(mode, accent, bubbles), [mode, accent, bubbles]);
+    const value = useMemo(
+        () => ({ mode, toggleMode, setMode, accent, setAccent, bubbles, setBubbles }),
+        [mode, toggleMode, setMode, accent, setAccent, bubbles, setBubbles],
+    );
 
     return (
         <ThemeModeContext.Provider value={value}>

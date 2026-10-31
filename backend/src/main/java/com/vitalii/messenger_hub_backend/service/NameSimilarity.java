@@ -7,15 +7,8 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Decides how likely two display names belong to the same person.
- *
- * This is the core of cross-messenger contact linking, and it is deliberately a pure
- * function over two strings: no database, no entities, so its behaviour can be pinned down
- * by tests rather than argued about.
- *
- * Scores are never treated as proof. Everything this class produces is a suggestion the
- * user confirms or rejects — the cost of a wrong link (two people merged into one) is high
- * enough that automatic linking would be the wrong design.
+ * How likely two display names belong to the same person. A pure function so it can be pinned down
+ * by tests. Scores only ever produce suggestions the user confirms.
  */
 public final class NameSimilarity {
 
@@ -74,31 +67,17 @@ public final class NameSimilarity {
     }
 
     /**
-     * How far apart two words may be spelled and still count as the same word.
-     *
-     * Expressed in edits rather than as a ratio because the errors this has to absorb are
-     * absolute, not proportional. Transliteration is lossy — и and й both land on i or y —
-     * so "Яцків" and a person's own "Yatskiw" differ by two characters no matter how long
-     * the surname is. A flat ratio threshold tight enough to reject "Vitalii" against
-     * "Yatskiv" would also reject that, which is the wrong trade for a suggestion the user
-     * confirms anyway.
+     * Allowed spelling distance between two words, in edits rather than a ratio: transliteration
+     * errors are absolute ("Яцків" vs "Yatskiw" differ by two letters whatever the length).
      */
     private static int maxEdits(int wordLength) {
         return wordLength <= 6 ? 1 : 2;
     }
 
     /**
-     * How well the smaller set of tokens is covered by the larger one.
-     *
-     * Comparing word by word rather than whole strings is what lets "Yatskiv Vitalii" match
-     * "Vitaliy Yatskiw": word order does not matter, and one misspelling does not sink the
-     * pair.
-     *
-     * Every word must find a partner. Averaging instead would let one perfect match carry a
-     * plain mismatch — "Vitalii Yatskiv" and "Oksana Yatskiv" average out to a suggestion,
-     * even though the given names say outright that these are two people. Relatives and
-     * colleagues share surnames constantly, so disagreement has to be decisive rather than
-     * merely count against.
+     * How well the smaller token set is covered by the larger one. Word order does not matter, but
+     * every word must find a partner: "Vitalii Yatskiv" and "Oksana Yatskiv" share a surname and
+     * are still two people.
      */
     private static Match fuzzy(Set<String> tokensA, Set<String> tokensB) {
         Set<String> smaller = tokensA.size() <= tokensB.size() ? tokensA : tokensB;
@@ -132,12 +111,8 @@ public final class NameSimilarity {
     }
 
     /**
-     * Folds a display name down to comparable letters.
-     *
-     * Transliteration is the part that matters here: the same person is routinely "Віталій"
-     * in Telegram and "Vitalii" in Slack, and without it those two share not one character.
-     * Emoji, punctuation and diacritics are dropped for the same reason — they are decoration
-     * on a display name, not identity.
+     * Normalises a display name for comparison: transliterates Cyrillic ("Віталій" → "vitalii") and
+     * drops emoji, punctuation and diacritics.
      */
     static String normalise(String raw) {
         if (raw == null) return "";
@@ -204,9 +179,8 @@ public final class NameSimilarity {
     }
 
     /**
-     * Cyrillic to Latin, following the Ukrainian national scheme closely enough for matching.
-     * Exactness is not the goal — both sides of a comparison go through the same mapping, so
-     * what matters is that the same sound lands on the same letters.
+     * Cyrillic to Latin, close to the Ukrainian national scheme. Both sides use the same mapping,
+     * so consistency matters more than exactness.
      */
     private static String transliterate(char c) {
         return switch (c) {

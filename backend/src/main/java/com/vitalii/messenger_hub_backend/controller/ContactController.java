@@ -16,16 +16,10 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Cross-messenger contacts: which accounts belong to the same person.
- *
- * Every lookup goes through the authenticated user's id, so an identity or suggestion id
- * from the request can only ever reach the caller's own data.
- */
+/** Cross-messenger contacts. Every lookup is scoped to the authenticated user. */
 @RestController
 @RequestMapping("/api/contacts")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class ContactController {
 
     private final ContactLinkService contactLinkService;

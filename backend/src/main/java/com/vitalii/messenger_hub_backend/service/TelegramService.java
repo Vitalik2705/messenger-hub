@@ -24,10 +24,8 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
-// ── MULTI-ACCOUNT TELEGRAM SERVICE ───────────────────────────────────────────
-// Supports multiple Telegram accounts per user.
-// All methods that operate on a specific chat accept an optional accountId.
-// If accountId is null, the account is resolved from the chat DB record (fallback: first connected).
+// Telegram, with several accounts per user. Chat-level methods take an optional accountId; when
+// null it is resolved from the chat record (falling back to the first connected account).
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -50,6 +48,14 @@ public class TelegramService {
         Map<String, String> request = Map.of("phone", phone);
         ResponseEntity<Map> response = restTemplate.postForEntity(
                 pythonServiceUrl + "/auth/send-code", request, Map.class);
+        return response.getBody();
+    }
+
+    /** Requests the code again by the next channel Telegram offers, typically SMS. */
+    public Map<String, Object> resendCode(String phone, String phoneCodeHash) {
+        Map<String, String> request = Map.of("phone", phone, "phone_code_hash", phoneCodeHash);
+        ResponseEntity<Map> response = restTemplate.postForEntity(
+                pythonServiceUrl + "/auth/resend-code", request, Map.class);
         return response.getBody();
     }
 
@@ -88,6 +94,39 @@ public class TelegramService {
         Map<String, Object> result = response.getBody();
         saveAccount(userId, result);
         return result;
+    }
+
+    // ── QR login ──────────────────────────────────────────────────────────────
+
+    public Map<String, Object> qrStart() {
+        ResponseEntity<Map> response = restTemplate.postForEntity(
+                pythonServiceUrl + "/auth/qr-start", Map.of(), Map.class);
+        return response.getBody();
+    }
+
+    /** Polled by the dialog; saves the account the moment the phone has scanned the code. */
+    @Transactional
+    public Map<String, Object> qrStatus(Long userId, String loginId) {
+        ResponseEntity<Map> response = restTemplate.getForEntity(
+                pythonServiceUrl + "/auth/qr-status?login_id={id}", Map.class, loginId);
+        return finishQrLogin(userId, response.getBody());
+    }
+
+    @Transactional
+    public Map<String, Object> qrPassword(Long userId, String loginId, String password) {
+        ResponseEntity<Map> response = restTemplate.postForEntity(
+                pythonServiceUrl + "/auth/qr-password",
+                Map.of("login_id", loginId, "password", password), Map.class);
+        return finishQrLogin(userId, response.getBody());
+    }
+
+    private Map<String, Object> finishQrLogin(Long userId, Map<String, Object> result) {
+        if (result == null || !"authorized".equals(result.get("status"))) return result;
+        saveAccount(userId, result);
+        // The session string is a full login to the account; it stays on the server.
+        Map<String, Object> visible = new HashMap<>(result);
+        visible.remove("session");
+        return visible;
     }
 
     private void saveAccount(Long userId, Map<String, Object> result) {
@@ -322,6 +361,14 @@ public class TelegramService {
 
             Boolean isRead = null;
             Object isReadObj = raw.get("is_read");
+            Integer mediaWidth = raw.get("media_width") instanceof Number n ? n.intValue() : null;
+            Integer mediaHeight = raw.get("media_height") instanceof Number n ? n.intValue() : null;
+            Long fileSize = raw.get("file_size") instanceof Number n ? n.longValue() : null;
+            @SuppressWarnings("unchecked")
+            Map<String, Object> linkPreview = raw.get("link_preview") instanceof Map<?, ?> lp ? (Map<String, Object>) lp : null;
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> reactions = raw.get("reactions") instanceof List<?> rs && !rs.isEmpty()
+                    ? (List<Map<String, Object>>) rs : null;
             if (isReadObj instanceof Boolean) isRead = (Boolean) isReadObj;
 
             return MessageDTO.builder()
@@ -336,6 +383,12 @@ public class TelegramService {
                     .mediaMime((String) raw.get("media_mime"))
                     .fileName((String) raw.get("file_name"))
                     .duration(duration)
+                    .mediaWidth(mediaWidth)
+                    .mediaHeight(mediaHeight)
+                    .fileSize(fileSize)
+                    .linkPreview(linkPreview)
+                    .reactions(reactions)
+                    .edited(Boolean.TRUE.equals(raw.get("edited")))
                     .isRead(isRead)
                     .replyToMessageId((String) raw.get("reply_to_msg_id"))
                     .replyToText((String) raw.get("reply_to_text"))
@@ -411,11 +464,8 @@ public class TelegramService {
     // ── SEND MEDIA ────────────────────────────────────────────────────────────
 
     /**
-     * Sends an attachment — a picture, a file, or a voice note.
-     *
-     * The payload is forwarded as the validator produced it. Whether Telegram renders it as
-     * a voice note rather than an audio file is decided in the Python service, which is the
-     * only place that can repackage the container the browser recorded.
+     * Sends a picture, file or voice note. Whether Telegram shows audio as a voice note is decided
+     * in the Python service, which repackages the browser's recording.
      */
     public Map<String, Object> sendMedia(Long userId, String chatId,
                                          MediaUploadValidator.ValidatedMedia media,
@@ -499,6 +549,79 @@ public class TelegramService {
         }
     }
 
+    /**
+     * The profile of the other side of a chat, as Telegram shows it. Fetched when the profile panel
+     * opens.
+     */
+    public Map<String, Object> getProfile(Long userId, String chatId, Long accountId) {
+        MessengerAccount account = accountId != null
+                ? resolveAccount(userId, accountId)
+                : getAccountForChatOrFirst(userId, chatId, MessengerType.TELEGRAM);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("X-Session", account.getAccessToken());
+        ResponseEntity<Map> response = restTemplate.exchange(
+                pythonServiceUrl + "/profile?chat_id=" + chatId,
+                HttpMethod.GET, new HttpEntity<>(headers), Map.class);
+        return response.getBody();
+    }
+
+    // ── REACTIONS, EDITS, TYPING ─────────────────────────────────────────────
+
+    private MessengerAccount accountFor(Long userId, String chatId, Long accountId) {
+        return accountId != null
+                ? resolveAccount(userId, accountId)
+                : getAccountForChatOrFirst(userId, chatId, MessengerType.TELEGRAM);
+    }
+
+    /** Sets this account's reaction on a message; an empty emoji removes it. */
+    public Map<String, Object> react(Long userId, String chatId, String messageId, String emoji, Long accountId) {
+        MessengerAccount account = accountFor(userId, chatId, accountId);
+        Map<String, Object> request = new HashMap<>();
+        request.put("session", account.getAccessToken());
+        request.put("chat_id", Long.parseLong(cleanId(chatId)));
+        request.put("message_id", Long.parseLong(cleanId(messageId)));
+        request.put("emoji", emoji == null || emoji.isBlank() ? null : emoji);
+        return restTemplate.postForEntity(pythonServiceUrl + "/react", request, Map.class).getBody();
+    }
+
+    public Map<String, Object> editMessage(Long userId, String chatId, String messageId, String text, Long accountId) {
+        MessengerAccount account = accountFor(userId, chatId, accountId);
+        Map<String, Object> request = new HashMap<>();
+        request.put("session", account.getAccessToken());
+        request.put("chat_id", Long.parseLong(cleanId(chatId)));
+        request.put("message_id", Long.parseLong(cleanId(messageId)));
+        request.put("text", text);
+        Map<String, Object> body = restTemplate.postForEntity(pythonServiceUrl + "/edit", request, Map.class).getBody();
+        // Only after Telegram accepts: a refused edit must leave the archive as it was.
+        messageArchiveService.rewrite(account.getId(), cleanId(chatId), cleanId(messageId), text);
+        return body;
+    }
+
+    public Map<String, Object> isTyping(Long userId, String chatId, Long accountId) {
+        MessengerAccount account = accountFor(userId, chatId, accountId);
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("X-Session", account.getAccessToken());
+        try {
+            return restTemplate.exchange(pythonServiceUrl + "/typing?chat_id=" + cleanId(chatId),
+                    HttpMethod.GET, new HttpEntity<>(headers), Map.class).getBody();
+        } catch (Exception e) {
+            return Map.of("typing", false);
+        }
+    }
+
+    public void sendTyping(Long userId, String chatId, Long accountId) {
+        MessengerAccount account = accountFor(userId, chatId, accountId);
+        Map<String, Object> request = new HashMap<>();
+        request.put("session", account.getAccessToken());
+        request.put("chat_id", Long.parseLong(cleanId(chatId)));
+        try {
+            restTemplate.postForEntity(pythonServiceUrl + "/typing", request, Map.class);
+        } catch (Exception e) {
+            log.debug("Typing signal not sent: {}", e.getMessage());
+        }
+    }
+
     // ── DISCONNECT ────────────────────────────────────────────────────────────
 
     @Transactional
@@ -526,8 +649,9 @@ public class TelegramService {
         log.info("Telegram disconnected for user: {} accountId: {}", userId, accountId);
     }
 
+    /** Refreshes one account's chat list only; the scheduler calls this once per account. */
     public void syncChats(MessengerAccount account) {
-        getUserChats(account.getUser().getId());
+        getChatsByAccount(account);
     }
 
     // ── DELETE ────────────────────────────────────────────────────────────────

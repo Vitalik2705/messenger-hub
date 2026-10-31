@@ -14,7 +14,6 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/telegram/auth")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class TelegramAuthController {
 
     private final TelegramService telegramService;
@@ -25,6 +24,35 @@ public class TelegramAuthController {
             @RequestBody Map<String, String> request) {
         Map<String, Object> result = telegramService.sendCode(request.get("phone"));
         return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/qr-start")
+    public ResponseEntity<Map<String, Object>> qrStart() {
+        return ResponseEntity.ok(telegramService.qrStart());
+    }
+
+    @GetMapping("/qr-status")
+    public ResponseEntity<Map<String, Object>> qrStatus(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestParam String loginId) {
+        User user = userService.findByEmail(userDetails.getUsername());
+        return ResponseEntity.ok(telegramService.qrStatus(user.getId(), loginId));
+    }
+
+    @PostMapping("/qr-password")
+    public ResponseEntity<Map<String, Object>> qrPassword(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestBody Map<String, String> request) {
+        User user = userService.findByEmail(userDetails.getUsername());
+        return ResponseEntity.ok(telegramService.qrPassword(
+                user.getId(), request.get("login_id"), request.get("password")));
+    }
+
+    @PostMapping("/resend-code")
+    public ResponseEntity<Map<String, Object>> resendCode(
+            @RequestBody Map<String, String> request) {
+        return ResponseEntity.ok(telegramService.resendCode(
+                request.get("phone"), request.get("phone_code_hash")));
     }
 
     @PostMapping("/sign-in")

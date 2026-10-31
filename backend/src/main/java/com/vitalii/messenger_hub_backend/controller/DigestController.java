@@ -16,7 +16,6 @@ import java.util.*;
 @RestController
 @RequestMapping("/api/digest")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 @Slf4j
 public class DigestController {
 
@@ -63,13 +62,7 @@ public class DigestController {
         return map;
     }
 
-    /**
-     * Unpacks the stored items, and the model's own JSON nested inside each of them.
-     *
-     * The summary arrives as a JSON string from the model rather than as structure, so it
-     * is parsed here instead of leaving the client to decide what a string containing
-     * braces means.
-     */
+    /** Unpacks stored digest items and the model's JSON summary inside each. */
     @SuppressWarnings("unchecked")
     private Object parseItems(String json) {
         if (json == null || json.isBlank()) return List.of();

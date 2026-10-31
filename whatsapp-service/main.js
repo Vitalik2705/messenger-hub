@@ -8,8 +8,8 @@ const os = require('os');
 const path = require('path');
 
 const app = express();
-// Вкладення приходять як base64 у JSON. Типовий ліміт express.json — 100 КБ,
-// тобто без цього рядка будь-яке медіа відхилялося б із 413 ще до обробника.
+// Attachments arrive as base64 inside JSON; express.json's default 100 kB limit
+// would reject any media with 413 before the handler ran.
 app.use(express.json({ limit: '30mb' }));
 
 /**
@@ -21,14 +21,24 @@ const sessions = {};
 // ── INIT SESSION ────────────────────────────────────────────────────────────
 
 /**
- * Builds and starts a client for one session.
- *
- * Extracted so that startup restoration and an explicit connect request go through exactly
- * the same path — a restored session that behaved differently from a freshly connected one
- * would be a very hard difference to spot.
+ * Removes Chromium's profile lock left by a previous container. The lock names the old hostname, so
+ * Chromium would treat it as a live process elsewhere and refuse to start. Only one client per
+ * session runs here, so any lock at startup is stale.
+ */
+function clearStaleProfileLock(sessionId) {
+    const dir = path.join('.wwebjs_auth', `session-${sessionId}`);
+    for (const name of ['SingletonLock', 'SingletonCookie', 'SingletonSocket']) {
+        try { fs.rmSync(path.join(dir, name), { force: true }); } catch { /* not there */ }
+    }
+}
+
+/**
+ * Builds and starts a client for one session; used both for restoring at startup and for a new
+ * connection.
  */
 function startSession(sessionId) {
     sessions[sessionId] = { status: 'initializing', qr: null, info: null, client: null };
+    clearStaleProfileLock(sessionId);
 
     const client = new Client({
         authStrategy: new LocalAuth({ clientId: sessionId }),
@@ -99,20 +109,11 @@ const isPersisted = (sessionId) =>
     !!sessionId && fs.existsSync(path.join(__dirname, '.wwebjs_auth', `session-${sessionId}`));
 
 /**
- * Resolves a request's session, reviving it from disk if this process has never seen it.
+ * Finds a request's session, reviving it from disk if this process has not seen it. LocalAuth keeps
+ * the login on disk, but the live clients are in memory and empty after a restart. Revived lazily,
+ * since each session costs its own headless Chromium.
  *
- * LocalAuth persists the WhatsApp login under .wwebjs_auth, but the `sessions` map holding
- * the live clients is process memory and starts empty. So every restart of this service left
- * each account authenticated on disk yet invisible over HTTP: /chats answered 401 "Not
- * connected" while the UI still showed the account as connected, because that badge comes
- * from a row in the backend's database rather than from anything here.
- *
- * Revival is lazy rather than done for every stored session at boot. Each session costs its
- * own headless Chromium, and the directory accumulates one entry per connection attempt ever
- * made — starting a browser for each would spend most of them on logins nobody uses now.
- *
- * Returns null while the client is still coming up; the caller reports that as "try again"
- * rather than as a failure, and the next poll finds it ready.
+ * Returns null while the client is still starting; the caller answers "try again".
  */
 function ensureSession(sessionId) {
     const existing = sessions[sessionId];
@@ -127,10 +128,8 @@ function ensureSession(sessionId) {
 }
 
 /**
- * Shared by every handler that needs a live client.
- *
- * Reads the token from either place it arrives: GETs carry it as a header, POSTs in the
- * body. Handling both here is what lets every route share one revival path.
+ * Shared by every handler that needs a live client. The token arrives as a header on GET and in the
+ * body on POST.
  */
 function requireSession(req, res) {
     const token = req.headers['x-token'] || req.body?.token;
@@ -162,18 +161,9 @@ app.get('/status', (req, res) => {
 // ── CHATS ────────────────────────────────────────────────────────────────────
 
 /**
- * Reads the chat list inside the WhatsApp Web page, one chat at a time.
- *
- * This replaces `client.getChats()`, which enriches every chat through `getChatModel` under
- * a single `Promise.all`. One chat that cannot be enriched — a group whose metadata will not
- * load, a newsletter, anything the library's selectors no longer match — rejects the whole
- * batch, and the caller receives nothing at all instead of the other two hundred chats that
- * were perfectly readable. That is what produced an empty WhatsApp list next to a session
- * that was demonstrably connected, reporting only a minified `r` for a reason.
- *
- * Per-chat isolation turns that into a degraded row rather than an empty screen: a chat that
- * fails enrichment still contributes its id, title and unread count, which is most of what a
- * list needs. Runs in the browser, so it returns plain data only.
+ * Reads the chat list inside the WhatsApp Web page, one chat at a time, instead of
+ * client.getChats(), where one chat that fails to load rejects the whole list. A failing chat still
+ * contributes its id, title and unread count. Runs in the browser and returns plain data.
  */
 /* eslint-disable no-undef */
 async function readChats() {
@@ -182,11 +172,8 @@ async function readChats() {
     const failures = [];
 
     /**
-     * The one-line preview for a chat row.
-     *
-     * On a media message `body` is not text — it holds the thumbnail as base64, which would
-     * put kilobytes of JPEG data where the last message should be. The caption is the real
-     * text when there is one; otherwise the row says what kind of attachment it was.
+     * The one-line preview for a chat row. For media `body` holds a base64 thumbnail, so the
+     * caption or the attachment kind is shown instead.
      */
     const LABELS = {
         image: '📷 Фото', video: '🎥 Відео', ptt: '🎤 Голосове', audio: '🎵 Аудіо',
@@ -265,7 +252,7 @@ app.get('/chats', async (req, res) => {
             id: chat.id,
             name: chat.name,
             type: chat.isGroup ? 'GROUP' : 'PERSONAL',
-            // WhatsApp не позначає ботів окремо — розрізняємо лише групу й людину.
+            // WhatsApp does not mark bots, so only group vs person is told apart.
             kind: chat.isGroup ? 'GROUP' : 'PERSON',
             last_message: chat.lastMessageBody,
             last_message_at: chat.lastMessageTs
@@ -285,25 +272,100 @@ app.get('/chats', async (req, res) => {
 
 // ── MESSAGES ─────────────────────────────────────────────────────────────────
 
+/**
+ * Reads one chat's messages inside the page without getChatById, which fails on the same IndexedDB
+ * lookup as the chat list. Each step is guarded separately so one odd message cannot empty the
+ * chat.
+ */
+/* eslint-disable no-undef */
+async function readMessages(chatId, limit) {
+    const Collections = window.require('WAWebCollections');
+    const wid = window.require('WAWebWidFactory').createWid(chatId);
+    const chat = Collections.Chat.get(wid) || (await Collections.Chat.find(wid));
+    if (!chat) return { error: 'chat not found', messages: [] };
+
+    // Wids and message keys stopped carrying `_serialized` in newer WhatsApp Web builds;
+    // their string form is the same value.
+    const ser = (x) => (x ? (x._serialized ?? String(x)) : null);
+    // Service entries ("messages are end-to-end encrypted", group changes) are not
+    // messages, and `isNotification` is no longer set on them — so judge by type.
+    const SERVICE = new Set(['e2e_notification', 'notification', 'notification_template',
+        'gp2', 'broadcast_notification', 'call_log', 'protocol', 'pinned_message']);
+    const keep = (m) => !m.isNotification && !SERVICE.has(m.type);
+    let msgs = chat.msgs.getModelsArray().filter(keep);
+    let loadError = null;
+    try {
+        const loader = window.require('WAWebChatLoadMessages');
+        while (msgs.length < limit) {
+            const loaded = await loader.loadEarlierMsgs({ chat });
+            if (!loaded || !loaded.length) break;
+            msgs = [...loaded.filter(keep), ...msgs];
+        }
+    } catch (e) {
+        // What is already in memory is still worth returning.
+        loadError = String(e?.message ?? e);
+    }
+
+    // Earlier pages can overlap what was already in memory.
+    const seen = new Set();
+    msgs = msgs.filter((m) => { const k = ser(m.id); if (seen.has(k)) return false; seen.add(k); return true; });
+    msgs.sort((a, b) => (a.t > b.t ? 1 : -1));
+    if (msgs.length > limit) msgs = msgs.slice(msgs.length - limit);
+
+    const messages = msgs.map((m) => ({
+        id: ser(m.id),
+        body: typeof m.body === 'string' && (!m.type || m.type === 'chat') ? m.body : (m.caption || ''),
+        type: m.type || 'chat',
+        author: ser(m.author),
+        from: ser(m.from),
+        notifyName: m.notifyName || m.senderObj?.pushname || null,
+        fromMe: !!m.id?.fromMe,
+        t: m.t ?? null,
+    })).filter((m) => m.id);
+
+    return { messages, loadError };
+}
+/* eslint-enable no-undef */
+
+/**
+ * A sent message's id as a string. Newer WhatsApp Web builds omit `_serialized` on message keys, so
+ * it is rebuilt from its parts.
+ */
+function messageKey(id) {
+    if (!id) return null;
+    if (id._serialized) return id._serialized;
+    if (id.$1) return id.$1;
+    const remote = typeof id.remote === 'string' ? id.remote : id.remote?._serialized;
+    return `${id.fromMe}_${remote}_${id.id}`;
+}
+
+const MEDIA_LABELS = {
+    image: '📷 Фото', video: '🎥 Відео', ptt: '🎤 Голосове', audio: '🎵 Аудіо',
+    document: '📄 Документ', sticker: '🩹 Стікер', location: '📍 Локація',
+};
+
 app.get('/messages', async (req, res) => {
     const { chat_id, limit = 50 } = req.query;
     const session = requireSession(req, res);
     if (!session) return;
 
     try {
-        const chat = await session.client.getChatById(chat_id);
-        const messages = await chat.fetchMessages({ limit: parseInt(limit) });
+        const { messages, loadError, error } = await session.client.pupPage.evaluate(
+            readMessages, chat_id, parseInt(limit) || 50);
+        if (error) return res.status(404).json({ error });
+        if (loadError) console.warn(`[WhatsApp] Older messages not loaded for ${chat_id}: ${loadError}`);
 
         const result = messages.map(m => ({
-            id: m.id._serialized,
-            text: m.body || '',
+            id: m.id,
+            text: m.body || (m.type !== 'chat' ? (MEDIA_LABELS[m.type] || '📎 Вкладення') : ''),
             sender_id: m.author || m.from,
-            sender_name: m.notifyName || m._data?.notifyName || m.id.user,
+            sender_name: m.notifyName || (m.author || m.from || '').split('@')[0],
             is_from_user: m.fromMe,
-            timestamp: new Date(m.timestamp * 1000).toISOString(),
+            timestamp: m.t ? new Date(m.t * 1000).toISOString() : null,
         }));
         res.json(result);
     } catch (e) {
+        console.error(`[WhatsApp] fetchMessages failed for ${chat_id}:`, e.stack || e.message);
         res.status(500).json({ error: e.message });
     }
 });
@@ -318,7 +380,7 @@ app.post('/send', async (req, res) => {
     try {
         const msg = await session.client.sendMessage(chat_id, text);
         res.json({
-            message_id: msg.id._serialized,
+            message_id: messageKey(msg.id),
             timestamp: new Date(msg.timestamp * 1000).toISOString(),
         });
     } catch (e) {
@@ -327,14 +389,13 @@ app.post('/send', async (req, res) => {
 });
 
 /**
- * Перепаковує запис із браузера в OGG/Opus.
+ * Repackages a browser recording as OGG/Opus.
  *
- * WhatsApp показує голосове голосовим лише для opus; Chrome пише той самий opus,
- * але в контейнері webm. Тому спершу пробуємо просту зміну контейнера (-c:a copy),
- * без перекодування, і лише потім кодуємо заново — це шлях для Safari з його AAC.
+ * WhatsApp shows a voice note as one only for opus. Chrome records opus too, but in a
+ * webm container, so a container swap (-c:a copy) is tried first and a full re-encode
+ * only after that — the path Safari's AAC takes.
  *
- * Якщо ffmpeg недоступний, повертаємо оригінал: краще надіслати аудіофайлом,
- * ніж не надіслати взагалі.
+ * Without ffmpeg the original is returned: better sent as an audio file than not at all.
  */
 async function toOggOpus(buffer, mimeType) {
     if (/ogg|opus/i.test(mimeType)) return { buffer, isOgg: true };
@@ -388,13 +449,13 @@ app.post('/send-media', async (req, res) => {
         const msg = await session.client.sendMessage(chat_id, media, {
             sendAudioAsVoice: asVoice,
             caption: caption || undefined,
-            // Інакше WhatsApp стисне надісланий PNG як фото й зіпсує те,
-            // що користувач свідомо надіслав файлом.
+            // Otherwise WhatsApp recompresses a PNG as a photo, spoiling what the
+            // user deliberately sent as a file.
             sendMediaAsDocument: kind === 'FILE',
         });
 
         res.json({
-            message_id: msg.id._serialized,
+            message_id: messageKey(msg.id),
             timestamp: new Date(msg.timestamp * 1000).toISOString(),
             voice_note: asVoice,
         });
@@ -411,10 +472,10 @@ app.post('/delete', async (req, res) => {
     try {
         const msg = await session.client.getMessageById(message_id);
         if (!msg) {
-            // Уже немає — для видалення це той самий результат, що й успіх.
+            // Already gone — for a delete that is the same as success.
             return res.json({ success: true });
         }
-        // true — видалити в усіх, а не лише в себе; саме цього очікують від кнопки.
+        // true = delete for everyone, which is what the button promises.
         await msg.delete(true);
         res.json({ success: true });
     } catch (e) {
@@ -454,11 +515,9 @@ app.post('/disconnect', async (req, res) => {
 
 // ── START ─────────────────────────────────────────────────────────────────────
 
-// whatsapp-web.js runs its own cleanup when the phone ends a session — LocalAuth.logout
-// deletes the browser profile — and on Windows Chromium still holds those files, so the
-// unlink fails with EBUSY. Nothing awaits that promise, and an unhandled rejection exits
-// Node, taking every other account's live client down with it. One session failing to
-// clean up is worth a log line, not the whole service.
+// When the phone ends a session, LocalAuth.logout deletes the profile, which fails with EBUSY on
+// Windows while Chromium holds the files. Nothing awaits that promise, and an unhandled rejection
+// would exit Node and drop every other account's client.
 process.on('unhandledRejection', (reason) => {
     console.error('[WhatsApp] Unhandled rejection:', reason?.stack || reason);
 });

@@ -15,17 +15,11 @@ import java.time.Duration;
 import java.util.*;
 
 /**
- * Talks to a language model running on the user's own machine.
+ * Client for the language model running locally in Ollama. Nothing is sent to the internet: the
+ * archive holds other people's private messages.
  *
- * Nothing here reaches the internet, and that is the point rather than a side effect. This
- * archive holds private correspondence written by people who never agreed to have their
- * words sent anywhere; a hosted API would make that decision on their behalf. Local
- * inference is the only version of this feature that can be defended, and it happens to
- * also be the only free one.
- *
- * Ollama is treated as what it is — a separate process the user starts and stops. Every
- * failure mode here is ordinary rather than exceptional, so they are reported as messages a
- * person can act on instead of stack traces.
+ * Ollama is a separate process the user starts and stops, so its failures are reported as readable
+ * messages rather than exceptions.
  */
 @Service
 @Slf4j
@@ -55,12 +49,8 @@ public class OllamaClient {
     }
 
     /**
-     * The models on this machine that can actually answer a question.
-     *
-     * Embedding models are pulled for semantic search and show up in the same list, but they
-     * have no generate endpoint at all: choosing one returns "does not support generate"
-     * after the analysis has already run its metrics. They are filtered out here rather than
-     * in the dialog, because the same list feeds every caller.
+     * Installed models that can generate text. Embedding models appear in the same list but have no
+     * generate endpoint, so they are filtered out here.
      */
     public List<String> availableModels() {
         try {
@@ -79,33 +69,28 @@ public class OllamaClient {
     }
 
     /**
-     * Whether a model exists only to produce vectors.
-     *
-     * Matched by name because Ollama's tag listing does not say what a model can do. Every
-     * embedding model published under the common registries carries one of these markers,
-     * and a chat model carrying them would be a first.
+     * Whether a model only produces embeddings, judged by name since Ollama does not report
+     * capabilities.
      */
+    /**
+     * How long Ollama keeps a model loaded after a request (its default is 5 minutes), so the next
+     * request does not reload gigabytes from disk.
+     */
+    private static final String KEEP_ALIVE = "30m";
+
     static boolean isEmbeddingOnly(String name) {
         String lower = name.toLowerCase();
         return lower.contains("embed") || lower.contains("minilm") || lower.startsWith("bge-");
     }
 
     /**
-     * Turns text into vectors, in one round trip for the whole batch.
-     *
-     * Batching matters more here than anywhere else: indexing an archive means tens of
-     * thousands of short texts, and paying HTTP and model-load overhead per message would
-     * turn minutes of work into hours.
-     *
-     * `/api/embed` is the current endpoint and takes a list; older builds only have
-     * `/api/embeddings`, which takes one string at a time. The fallback is worth the few
-     * lines because the alternative is the feature silently not working on a machine whose
-     * Ollama is a version behind.
+     * Embeds a batch of texts in one request. Falls back to the older one-text-per-call
+     * `/api/embeddings` endpoint when `/api/embed` is missing.
      */
     public List<float[]> embed(String model, List<String> texts) {
         if (texts.isEmpty()) return List.of();
         try {
-            Map<String, Object> request = Map.of("model", model, "input", texts);
+            Map<String, Object> request = Map.of("model", model, "input", texts, "keep_alive", KEEP_ALIVE);
             ResponseEntity<String> response = restTemplate.postForEntity(
                     baseUrl + "/api/embed", new HttpEntity<>(request, jsonHeaders()), String.class);
             JsonNode embeddings = JSON.readTree(response.getBody()).path("embeddings");
@@ -158,6 +143,23 @@ public class OllamaClient {
         return headers;
     }
 
+    /** Models currently held in memory — a loaded model answers without a disk reload. */
+    public List<String> loadedModels() {
+        try {
+            ResponseEntity<String> response = restTemplate.getForEntity(baseUrl + "/api/ps", String.class);
+            List<String> names = new ArrayList<>();
+            JSON.readTree(response.getBody()).path("models")
+                    .forEach(model -> names.add(model.path("name").asText()));
+            return names;
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    public String baseUrl() {
+        return baseUrl;
+    }
+
     public boolean isReachable() {
         try {
             restTemplate.getForEntity(baseUrl + "/api/tags", String.class);
@@ -168,21 +170,14 @@ public class OllamaClient {
     }
 
     /**
-     * Runs one prompt and insists on JSON back.
-     *
-     * `format: json` makes Ollama constrain decoding to valid JSON, which removes the whole
-     * class of failures where a small model wraps its answer in prose or a code fence.
-     * Temperature is low because this is extraction, not writing.
+     * Runs one prompt with `format: json`, which constrains decoding to valid JSON. Low
+     * temperature, since this is extraction.
      */
     public Generation generateJson(String model, String system, String prompt) {
         return generateJson(model, system, prompt, null);
     }
 
-    /**
-     * @param temperature how far the model may stray; null keeps the extraction default.
-     *                    Writing in someone's voice wants a little more than extraction
-     *                    does, which is why this is a setting rather than a constant.
-     */
+    /** @param temperature null keeps the extraction default; reply drafting uses a little more. */
     public Generation generateJson(String model, String system, String prompt, Double temperature) {
         // Caught here rather than at the HTTP layer: a saved analysis profile can still name
         // an embedding model, and "does not support generate" says nothing to the user.
@@ -198,6 +193,7 @@ public class OllamaClient {
         request.put("prompt", prompt);
         request.put("stream", false);
         request.put("format", "json");
+        request.put("keep_alive", KEEP_ALIVE);
         request.put("options", Map.of(
                 "temperature", temperature == null ? 0.2 : temperature,
                 "num_ctx", 8192

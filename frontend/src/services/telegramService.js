@@ -13,6 +13,22 @@ const telegramService = {
         const response = await api.post('/telegram/auth/send-code', { phone });
         return response.data;
     },
+    qrStart: async () => {
+        const response = await api.post('/telegram/auth/qr-start');
+        return response.data;
+    },
+    qrStatus: async (loginId) => {
+        const response = await api.get('/telegram/auth/qr-status', { params: { loginId } });
+        return response.data;
+    },
+    qrPassword: async (loginId, password) => {
+        const response = await api.post('/telegram/auth/qr-password', { login_id: loginId, password });
+        return response.data;
+    },
+    resendCode: async (phone, phoneCodeHash) => {
+        const response = await api.post('/telegram/auth/resend-code', { phone, phone_code_hash: phoneCodeHash });
+        return response.data;
+    },
     signIn: async (data) => {
         const response = await api.post('/telegram/auth/sign-in', data);
         return response.data;
@@ -21,8 +37,10 @@ const telegramService = {
         const response = await api.post('/telegram/auth/sign-in-password', data);
         return response.data;
     },
-    getChats: async (accountId = null) => {
+    // Polls pass { avatars: false } — the list already holds them from the first load.
+    getChats: async (accountId = null, { avatars = true } = {}) => {
         const params = accountId ? { accountId } : {};
+        if (!avatars) params.avatars = false;
         const response = await api.get('/telegram/chats', { params });
         return response.data;
     },
@@ -55,6 +73,30 @@ const telegramService = {
     getUserStatus: async (chatId, accountId = null) => {
         const params = accountId ? { accountId } : {};
         const response = await api.get(`/telegram/user-status/${chatId}`, { params });
+        return response.data;
+    },
+    // An empty emoji removes this account's reaction.
+    react: async (chatId, messageId, emoji, accountId = null) => {
+        const params = accountId ? { accountId } : {};
+        const response = await api.post('/telegram/react', { chat_id: chatId, message_id: messageId, emoji }, { params });
+        return response.data;
+    },
+    editMessage: async (chatId, messageId, text, accountId = null) => {
+        const params = accountId ? { accountId } : {};
+        const response = await api.post('/telegram/edit', { chat_id: chatId, message_id: messageId, text }, { params });
+        return response.data;
+    },
+    isTyping: async (chatId, accountId = null) => {
+        const params = accountId ? { accountId } : {};
+        const response = await api.get(`/telegram/typing/${chatId}`, { params });
+        return response.data;
+    },
+    sendTyping: (chatId, accountId = null) =>
+        api.post(`/telegram/typing/${chatId}`, {}, { params: accountId ? { accountId } : {} }).catch(() => {}),
+    // Opened on demand by the profile panel; never part of sync.
+    getProfile: async (chatId, accountId = null) => {
+        const params = accountId ? { accountId } : {};
+        const response = await api.get(`/telegram/profile/${chatId}`, { params });
         return response.data;
     },
     getAvatar: async (chatId) => {

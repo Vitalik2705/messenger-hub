@@ -7,11 +7,8 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
 
 /**
- * Pushes messages to a single authenticated user.
- *
- * Destinations are per-user rather than a global topic keyed by user id: the previous
- * /topic/user/{userId}/messages scheme let any connected client subscribe to another
- * user's stream simply by changing the number.
+ * Pushes messages to one authenticated user through a per-user destination, so no client can
+ * subscribe to another user's stream.
  */
 @Controller
 @RequiredArgsConstructor

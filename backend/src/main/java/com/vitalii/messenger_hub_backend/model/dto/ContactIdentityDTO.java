@@ -16,10 +16,8 @@ public class ContactIdentityDTO {
     private Long chatId;
     private MessengerType messengerType;
     /**
-     * Which of the user's accounts sees this chat.
-     *
-     * Needed to tell two identities apart at all when they sit on the same network: a person
-     * reachable from two Telegram accounts otherwise renders as the same name twice.
+     * Which of the user's accounts sees this chat; tells apart identities of one person on the same
+     * network.
      */
     private Long messengerAccountId;
     private String externalChatId;

@@ -9,13 +9,8 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 public class AnalysisAsyncConfig {
 
     /**
-     * One analysis at a time, and a queue behind it.
-     *
-     * Spring's default async executor would start every requested run immediately. That is
-     * wrong here for a physical reason: local inference saturates the CPU, so two runs in
-     * parallel do not finish in half the time — they finish in roughly twice the time each,
-     * while making the rest of the application sluggish. Serialising them keeps the first
-     * result arriving as early as it possibly can.
+     * A single-thread executor with a queue for model work: local inference saturates the CPU, so
+     * parallel runs would each take about twice as long.
      */
     @Bean(name = "taskExecutor")
     public TaskExecutor analysisExecutor() {

@@ -250,11 +250,8 @@ public class WhatsAppService {
     }
 
     /**
-     * Sends an attachment.
-     *
-     * WhatsApp does distinguish voice notes from audio files, and whatsapp-web.js exposes
-     * that as a flag on the send call — so unlike Slack or Discord, the kind carried here
-     * changes what the recipient sees.
+     * Sends an attachment. WhatsApp distinguishes voice notes from audio files, so the kind changes
+     * what the recipient sees.
      */
     public void sendMedia(Long userId, String chatId,
                           MediaUploadValidator.ValidatedMedia media, Long accountId) {
@@ -273,12 +270,7 @@ public class WhatsAppService {
 
     // ── DELETE ────────────────────────────────────────────────────────────────
 
-    /**
-     * Deletes a message for everyone, then drops the archived copy.
-     *
-     * Order matters: if WhatsApp refuses the deletion the local copy is still the truth,
-     * so the archive is only cleaned once the messenger has confirmed.
-     */
+    /** Deletes a message for everyone, and the archived copy only after WhatsApp confirms. */
     public void deleteMessage(Long userId, String chatId, String messageId, Long accountId) {
         MessengerAccount account = accountId != null
                 ? resolveAccount(userId, accountId)

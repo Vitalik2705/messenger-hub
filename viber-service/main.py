@@ -60,7 +60,7 @@ async def get_chats(x_token: str = Header(...)):
             "id": user_id,
             "name": info.get("name", user_id),
             "type": "PERSONAL",
-            # Viber-бот бачить лише людей, які йому написали.
+            # A Viber bot only sees people who have written to it.
             "kind": "PERSON",
             "last_message": info.get("last_message"),
             "last_message_at": info.get("last_message_at"),

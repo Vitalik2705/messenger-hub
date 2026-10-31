@@ -14,15 +14,11 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 /**
- * Does the analysis, off the request thread.
+ * Runs an analysis off the request thread: metrics first (exact and cheap), then the model, whose
+ * failure never discards the metrics.
  *
- * Arithmetic first, model second. The order is the design: metrics are exact and cost
- * nothing, so they always run; the model is slow, fallible and optional, so it runs last
- * and its failure never destroys the half that already succeeded.
- *
- * Deliberately not transactional. A generation call holds this thread for tens of seconds
- * and a transaction spanning it would pin a database connection for the duration; every
- * database step is a short call back into {@link ChatAnalysisService} instead.
+ * Not transactional: a generation call takes tens of seconds and must not hold a database
+ * connection. Each database step is a short call into ChatAnalysisService.
  */
 @Component
 @RequiredArgsConstructor
@@ -33,11 +29,8 @@ public class AnalysisRunner {
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("dd.MM HH:mm");
 
     /**
-     * What the model is asked to produce.
-     *
-     * Every claim must carry a quotation. Small models confabulate fluently, and the only
-     * practical defence is to make the output checkable: a claim the user can trace back to
-     * a real message is a claim they can reject.
+     * The required model output. Every claim must carry a quotation, so the user can check it
+     * against a real message.
      */
     private static final String SUMMARY_SYSTEM = """
             Ти аналізуєш приватне листування і відповідаєш ВИКЛЮЧНО валідним JSON.
@@ -62,13 +55,7 @@ public class AnalysisRunner {
     private final MessageRepository messageRepository;
     private final OllamaClient ollama;
 
-    /**
-     * Starts once the queued run is committed.
-     *
-     * AFTER_COMMIT rather than a direct call: the worker thread queries for a row the
-     * request thread has only just inserted, and without the commit boundary it would
-     * regularly find nothing.
-     */
+    /** Starts after the queued run is committed, so the worker thread can see the new row. */
     @Async
     @TransactionalEventListener
     public void onRequested(ChatAnalysisService.AnalysisRequested event) {
@@ -76,11 +63,8 @@ public class AnalysisRunner {
     }
 
     /**
-     * Runs a whole sweep, on the same single thread as everything else.
-     *
-     * Sharing the executor is deliberate: a batch queues model runs of its own, and letting
-     * the scan and those runs compete for the CPU would make both slower than running them
-     * in order.
+     * Runs a batch on the same single-thread executor as everything else, so the scan and its model
+     * runs do not compete for the CPU.
      */
     @Async
     @TransactionalEventListener(fallbackExecution = true)
@@ -157,11 +141,8 @@ public class AnalysisRunner {
     }
 
     /**
-     * The frame every user-written question is asked inside.
-     *
-     * The user supplies the question; this supplies the discipline. Left to itself a 7B
-     * model answers a free-form question with fluent paragraphs that cite nothing, which is
-     * exactly the output that cannot be checked and therefore cannot be trusted.
+     * The frame around a user-written question: it requires quotations, so the answer can be
+     * checked.
      */
     private static final String CUSTOM_SYSTEM = """
             Ти аналізуєш приватне листування і відповідаєш ВИКЛЮЧНО валідним JSON.
@@ -177,12 +158,8 @@ public class AnalysisRunner {
             """;
 
     /**
-     * One question, one call.
-     *
-     * Asking several questions in a single generation makes a small model blur them
-     * together — it answers the first properly and lets the rest decay into paraphrase.
-     * Separate calls cost more wall-clock time and are the reason each one is timed
-     * individually, so the price of a question is visible rather than buried in a total.
+     * One question per model call: a small model blurs several questions in one generation
+     * together. Each call is timed separately.
      */
     private Map<String, Object> ask(String model, String conversation,
                                     ChatAnalysisService.PromptSpec spec) {
@@ -219,10 +196,8 @@ public class AnalysisRunner {
     }
 
     /**
-     * The transcript, plainly labelled.
-     *
-     * Speakers are "Я" and the chat's own name rather than raw ids: that is what the model
-     * has to reason about, and what the user will read the returned quotations against.
+     * The transcript for the model, with speakers named "Я" and the chat's name, matching what the
+     * user reads.
      */
     private String buildPrompt(String chatName, List<Message> messages) {
         String counterpart = chatName == null || chatName.isBlank() ? "Співрозмовник" : chatName;

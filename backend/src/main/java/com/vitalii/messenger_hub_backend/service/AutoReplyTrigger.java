@@ -7,14 +7,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
- * Turns "a message arrived" into "consider replying", on a background thread.
- *
- * Separate from {@link AutoReplyService} so the transactional work stays reachable through
- * a proxy, and separate from archiving so a slow generation can never delay the archive or
- * the notification the user is actually waiting for.
- *
- * It shares the single-thread executor with analysis: both saturate the CPU, and running a
- * reply and an analysis at once would make each of them roughly twice as slow.
+ * Turns "a message arrived" into "consider replying" on a background thread, so generation never
+ * delays archiving or notifications. Shares the single model executor with analysis.
  */
 @Component
 @RequiredArgsConstructor

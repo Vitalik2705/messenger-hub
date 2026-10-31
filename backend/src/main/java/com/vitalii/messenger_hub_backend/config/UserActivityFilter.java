@@ -12,13 +12,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
-/**
- * Records that the user is doing something, so background jobs can stand aside.
- *
- * A filter rather than a call in each controller: the signal has to cover every route,
- * including the ones added later, and a controller that forgets to report itself would
- * silently let the archiver compete with it.
- */
+/** Records user activity for every route, so background jobs can stand aside. */
 @Component
 @RequiredArgsConstructor
 @Order(1)
@@ -30,9 +24,10 @@ public class UserActivityFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
         String path = request.getRequestURI();
-        // Status polling is the client asking "are you done yet" — treating it as activity
-        // would make a watched job never resume.
-        if (path.startsWith("/api/") && !path.contains("/status")) {
+        // Status polls and requests the client marks as background (timers) are not activity;
+        // counting them would keep an idle open tab "active" forever.
+        boolean background = "1".equals(request.getHeader("X-Background"));
+        if (path.startsWith("/api/") && !path.contains("/status") && !background) {
             gate.markUserActivity();
         }
         chain.doFilter(request, response);

@@ -12,15 +12,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Encrypts credentials that were stored before {@code EncryptedStringConverter} existed.
- *
- * The converter only encrypts on write, so rows written earlier would stay in clear text
- * until their account happened to be saved again — which for a connected account may be
- * never.
- *
- * This deliberately works through JDBC rather than JPA. Loading and re-saving the entity
- * does nothing: the converter hands the entity the same clear-text value it had before,
- * so Hibernate's dirty check sees no change and never issues an UPDATE.
+ * Encrypts credentials stored before EncryptedStringConverter existed. Uses JDBC: re-saving through
+ * JPA would not issue an UPDATE because the converter returns the same plain value to the entity.
  */
 @Component
 @RequiredArgsConstructor

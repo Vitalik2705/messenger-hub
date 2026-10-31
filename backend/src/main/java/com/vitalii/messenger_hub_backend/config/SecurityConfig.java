@@ -27,12 +27,7 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthFilter;
 
-    /**
-     * Where the frontend is served from. Vite uses 5273 when run by hand; the Docker
-     * image is served by nginx on a different port, so this cannot be hardcoded.
-     * Credentials are allowed on these requests, so the list stays explicit — a wildcard
-     * origin would be rejected by the browser anyway.
-     */
+    /** Allowed frontend origins. Explicit, not a wildcard, because credentials are allowed. */
     @Value("${app.cors.allowed-origins:http://localhost:5273}")
     private List<String> allowedOrigins;
 
@@ -70,7 +65,7 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(allowedOrigins);
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(Arrays.asList("authorization", "content-type", "x-auth-token"));
+        configuration.setAllowedHeaders(Arrays.asList("authorization", "content-type", "x-auth-token", "x-background"));
         configuration.setExposedHeaders(List.of("x-auth-token"));
         configuration.setAllowCredentials(true);
 

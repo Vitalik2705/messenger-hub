@@ -1,12 +1,6 @@
 package com.vitalii.messenger_hub_backend.model.enums;
 
-/**
- * What became of a generated reply.
- *
- * This is the measurement the whole feature rests on: a suggestion nobody sends is a
- * suggestion that failed, and only the outcome distinguishes the two. SENT versus
- * SENT_EDITED versus REJECTED is the acceptance rate, on real conversations.
- */
+/** What became of a generated reply. SENT vs SENT_EDITED vs REJECTED is the acceptance rate. */
 public enum DraftStatus {
     /** Waiting in the composer. */
     PENDING,
