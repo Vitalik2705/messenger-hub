@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="250" viewBox="0 0 880 250" role="img" aria-label="Один запит іде двома шляхами: повнотекстовим через tsquery і GIN-індекс, і семантичним через ембединг і косинусну близькість; результати різні"><style>
+.svg-box{fill:none;stroke:#141A24;stroke-width:1.1;opacity:.55}
+.svg-strong{fill:none;stroke:#141A24;stroke-width:1.8}
+.svg-hot{fill:none;stroke:#C33C1B;stroke-width:1.8}
+.t{fill:#141A24;font-family:Consolas,monospace;font-size:12px}
+.tb{fill:#141A24;font-family:"Segoe UI",sans-serif;font-size:12.5px;font-weight:600}
+.ts{fill:#141A24;font-family:"Segoe UI",sans-serif;font-size:11px;opacity:.72}
+.tl{fill:#141A24;font-family:Consolas,monospace;font-size:10px;opacity:.62}
+.thot{fill:#C33C1B;font-family:Consolas,monospace;font-size:10px}
+.ln{stroke:#141A24;stroke-width:1.1;fill:none;opacity:.5}
+.ln-hot{stroke:#C33C1B;stroke-width:1.4;fill:none}
+.panel{font-family:"Segoe UI",sans-serif;font-size:12px;font-weight:700;fill:#141A24}
+</style><rect width="880" height="250" fill="#FFFFFF"/>
+        <rect class="svg-strong" x="8" y="94" width="168" height="58" rx="2"/>
+        <text class="tb" x="92" y="118" text-anchor="middle">запит користувача</text>
+        <text class="ts" x="92" y="138" text-anchor="middle">«домовлялись про оренду»</text>
+
+        <path class="ln" d="M176 112 H206 V52 H236"/><polygon points="230,48 238,52 230,56" fill="#141A24" opacity=".5"/>
+        <path class="ln-hot" d="M176 134 H206 V196 H236"/><polygon points="230,192 238,196 230,200" fill="#C33C1B"/>
+
+        <!-- верхній шлях -->
+        <rect class="svg-box" x="238" y="28" width="150" height="48" rx="2"/>
+        <text class="t" x="313" y="50" text-anchor="middle">to_tsquery</text>
+        <text class="ts" x="313" y="66" text-anchor="middle">слова + префікс</text>
+        <path class="ln" d="M388 52 H424"/><polygon points="418,48 426,52 418,56" fill="#141A24" opacity=".5"/>
+        <rect class="svg-box" x="426" y="28" width="150" height="48" rx="2"/>
+        <text class="t" x="501" y="50" text-anchor="middle">індекс GIN</text>
+        <text class="ts" x="501" y="66" text-anchor="middle">ранжування</text>
+        <path class="ln" d="M576 52 H612"/><polygon points="606,48 614,52 606,56" fill="#141A24" opacity=".5"/>
+        <rect class="svg-box" x="614" y="22" width="258" height="60" rx="2"/>
+        <text class="ts" x="628" y="44">знаходить там, де є саме ці слова:</text>
+        <text class="tb" x="628" y="66">«про оренду домовились учора»</text>
+
+        <!-- нижній шлях -->
+        <rect class="svg-hot" x="238" y="172" width="150" height="48" rx="2"/>
+        <text class="t" x="313" y="194" text-anchor="middle" fill="#C33C1B">вектор тексту</text>
+        <text class="thot" x="313" y="210" text-anchor="middle">768 чисел</text>
+        <path class="ln-hot" d="M388 196 H424"/><polygon points="418,192 426,196 418,200" fill="#C33C1B"/>
+        <rect class="svg-hot" x="426" y="172" width="150" height="48" rx="2"/>
+        <text class="t" x="501" y="194" text-anchor="middle" fill="#C33C1B">косинус</text>
+        <text class="thot" x="501" y="210" text-anchor="middle">перебір векторів</text>
+        <path class="ln-hot" d="M576 196 H612"/><polygon points="606,192 614,196 606,200" fill="#C33C1B"/>
+        <rect class="svg-hot" x="614" y="166" width="258" height="60" rx="2"/>
+        <text class="ts" x="628" y="188">знаходить за змістом, без спільних слів:</text>
+        <text class="tb" x="628" y="210">«квартиру беремо з понеділка»</text>
+
+        <text class="tl" x="238" y="120">повнотекстовий: точність</text>
+        <text class="thot" x="238" y="140">семантичний: пригадування</text>
+      </svg>

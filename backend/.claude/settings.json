@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew compileJava -q --console=plain)",
+      "Bash(./gradlew bootRun --console=plain)",
+      "Bash(tee /tmp/bootrun.log)",
+      "Bash(./gradlew test *)",
+      "Bash(which psql *)",
+      "Read(//c/Program Files/PostgreSQL/**)",
+      "Read(//c/Program Files/PostgreSQL/18/bin/**)",
+      "Read(//c/Program Files/PostgreSQL/18/share/extension//**)",
+      "Bash(./gradlew compileJava -q)",
+      "Bash(netstat -ano)",
+      "Bash(export PGPASSWORD=postgres)",
+      "Bash(npm run *)",
+      "Bash(ls \"C:/Users/Unitalk/.claude/projects/d--University-messenger-hub/memory/\" 2>&1)",
+      "Read(//c/Users/Unitalk/.claude/projects/d--University-messenger-hub/memory/**)",
+      "Bash(./gradlew compileJava)",
+      "Bash(./gradlew bootRun)",
+      "Bash(cd /d/University/messenger-hub && cat backend/settings.gradle && ls backend/build/libs 2>/dev/null; echo \"=== gradle wrapper ===\"; cat backend/gradle/wrapper/gradle-wrapper.properties | grep distributionUrl)",
+      "Read(//d/University/messenger-hub/**)",
+      "Bash(cd /d/University/messenger-hub && grep -n \"session\\\\|StringSession\\\\|\\\\.session\\\\|os.getenv\\\\|API_ID\\\\|API_HASH\" telegram-service/main.py | head -20)",
+      "PowerShell($p = \"C:\\\\Program Files\\\\Docker\\\\Docker\\\\Docker Desktop.exe\"; if \\(Test-Path $p\\) { Start-Process $p; \"starting Docker Desktop\" } else { \"not found at $p\" })",
+      "Bash(docker compose *)",
+      "Bash(grep -E --line-buffered \"ERROR|error:|failed|FAILED|Successfully|Building [0-9]|Built$\")",
+      "Bash(python -)",
+      "Bash(cd /d/University/messenger-hub && grep -n -B12 \"@app.post\\(\\\\\"/send\\\\\"\\)\" slack-service/main.py | head -20; echo \"=== discord models ===\"; grep -n -B12 \"@app.post\\(\\\\\"/send\\\\\"\\)\" discord-service/main.py | head -20)",
+      "Bash(cd /d/University/messenger-hub && grep -n -A6 \"class SendMessageRequest\" slack-service/main.py discord-service/main.py; echo \"=== imports ===\"; head -12 slack-service/main.py; echo \"---\"; head -12 discord-service/main.py)",
+      "Bash(cd /d/University/messenger-hub && sed -n '150,175p' whatsapp-service/main.js && head -8 whatsapp-service/main.js)",
+      "Bash(cd /d/University/messenger-hub && grep -n -A14 '@PostMapping\\(\"/delete\"\\)' backend/src/main/java/com/vitalii/messenger_hub_backend/controller/TelegramController.java; echo \"=== service ===\"; grep -n -A22 \"public .*deleteMessage\" backend/src/main/java/com/vitalii/messenger_hub_backend/service/TelegramService.java; echo \"=== python ===\"; grep -n -A18 '@app.post\\(\"/delete' telegram-service/main.py)",
+      "Bash(cd /d/University/messenger-hub && grep -n \"delete\\\\|Delete\" frontend/src/services/telegramService.js frontend/src/pages/ChatWindow.jsx frontend/src/pages/chat/MessageBubble.jsx | head -20)",
+      "Bash(cd /d/University/messenger-hub && cat frontend/src/services/slackService.js && echo \"=== telegram delete ===\" && sed -n '70,90p' frontend/src/services/telegramService.js)",
+      "Bash(cd /d/University/messenger-hub && sed -n '355,395p' frontend/src/pages/ChatWindow.jsx)",
+      "Bash(grep -n \"Бічна панель\\\\|Основна область\\\\|{/\\\\* Filters \\\\*/}\\\\|{/\\\\* Пошук \\\\*/}\\\\|{/\\\\* Chat list \\\\*/}\\\\|Single \\\\\"Add account\\\\\"\" src/pages/DashboardPage.jsx)"
+    ],
+    "additionalDirectories": [
+      "d:\\University\\messenger-hub"
+    ]
+  }
+}

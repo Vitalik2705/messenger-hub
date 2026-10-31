@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="290" viewBox="0 0 900 290" role="img" aria-label="Архів, мовна модель, розпізнавання мови та аналітика працюють у межах однієї машини; назовні не йде нічого">
+<style>
+.b{fill:none;stroke:#141A24;stroke-width:1.1;opacity:.55}
+.bh{fill:none;stroke:#C33C1B;stroke-width:1.6}
+.ghost{fill:none;stroke:#141A24;stroke-width:1;opacity:.3;stroke-dasharray:5 4}
+.t{fill:#141A24;font-family:"Segoe UI",sans-serif;font-size:13px}
+.tg{fill:#141A24;font-family:"Segoe UI",sans-serif;font-size:13px;opacity:.45}
+.lab{fill:#C33C1B;font-family:Consolas,monospace;font-size:11px;font-weight:700;letter-spacing:.14em}
+.note{fill:#C33C1B;font-family:Consolas,monospace;font-size:11px;letter-spacing:.04em}
+.ln{stroke:#141A24;stroke-width:1.1;fill:none;opacity:.3;stroke-dasharray:5 4}
+</style>
+<rect width="900" height="290" fill="#FFFFFF"/>
+
+<rect class="bh" x="30" y="34" width="530" height="224" rx="4"/>
+<text class="lab" x="50" y="60">ЦЯ МАШИНА</text>
+
+<rect class="b" x="50" y="76" width="230" height="62" rx="2"/>
+<text class="t" x="165" y="113" text-anchor="middle">архів листування</text>
+
+<rect class="b" x="310" y="76" width="230" height="62" rx="2"/>
+<text class="t" x="425" y="113" text-anchor="middle">мовна модель</text>
+
+<rect class="b" x="50" y="156" width="230" height="62" rx="2"/>
+<text class="t" x="165" y="193" text-anchor="middle">розпізнавання мови</text>
+
+<rect class="b" x="310" y="156" width="230" height="62" rx="2"/>
+<text class="t" x="425" y="193" text-anchor="middle">пошук і аналітика</text>
+
+<path class="ln" d="M560 146 H700"/>
+<line x1="614" y1="128" x2="646" y2="164" stroke="#C33C1B" stroke-width="2.6"/>
+<line x1="646" y1="128" x2="614" y2="164" stroke="#C33C1B" stroke-width="2.6"/>
+<text class="note" x="630" y="196" text-anchor="middle">нічого не виходить</text>
+
+<rect class="ghost" x="700" y="116" width="170" height="60" rx="2"/>
+<text class="tg" x="785" y="152" text-anchor="middle">зовнішні сервіси</text>
+</svg>

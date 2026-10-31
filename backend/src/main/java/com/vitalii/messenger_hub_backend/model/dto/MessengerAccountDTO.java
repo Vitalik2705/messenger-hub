@@ -16,6 +16,8 @@ public class MessengerAccountDTO {
     private Long id;
     private MessengerType messengerType;
     private String username;
+    private String accountLabel;
+    private String externalUserId;
     private Boolean isConnected;
     private LocalDateTime lastSyncAt;
     private LocalDateTime createdAt;

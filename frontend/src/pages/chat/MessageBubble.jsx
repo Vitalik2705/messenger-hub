@@ -1,130 +1,194 @@
-import { Box, Avatar, Typography } from '@mui/material';
+import { Box, Avatar, Typography, IconButton, Tooltip } from '@mui/material';
 import MessageMedia from './MessageMedia';
 import ReplyIcon from '@mui/icons-material/Reply';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import DoneIcon from '@mui/icons-material/Done';
+import DoneAllIcon from '@mui/icons-material/DoneAll';
+import { MESSENGER_COLORS, radius, numeric } from '../../theme/tokens';
+import { formatClock, avatarTint, initialsOf } from '../../utils/format';
 
-const gradients = ['linear-gradient(135deg,#f6d365,#fda085)','linear-gradient(135deg,#a1c4fd,#c2e9fb)','linear-gradient(135deg,#fd7043,#ff8a65)','linear-gradient(135deg,#81c784,#a5d6a7)','linear-gradient(135deg,#ce93d8,#f48fb1)','linear-gradient(135deg,#4db6ac,#80cbc4)','linear-gradient(135deg,#ffb74d,#ffa726)'];
-const gradientFor = n => gradients[(n?.charCodeAt(0)||0) % gradients.length];
-const fmtTime = ts => ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-
-const MessageStatus = ({ isRead }) => {
+/** Sent versus read, at the size of a footnote — it is confirmation, not content. */
+function MessageStatus({ isRead }) {
     if (isRead === null || isRead === undefined) return null;
-    if (isRead) {
-        // Read — two coral ticks
-        return (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: '1px', flexShrink: 0 }}>
-                <Typography sx={{ fontSize: 11, lineHeight: 1, color: '#e8470a', fontWeight: 700 }}>✓</Typography>
-                <Typography sx={{ fontSize: 11, lineHeight: 1, color: '#e8470a', fontWeight: 700 }}>✓</Typography>
-            </Box>
-        );
-    }
-    // Sent but not read — single gray tick
+    const Icon = isRead ? DoneAllIcon : DoneIcon;
     return (
-        <Typography sx={{ fontSize: 11, lineHeight: 1, color: '#c4b5a0', flexShrink: 0 }}>✓</Typography>
+        <Icon sx={(t) => ({
+            fontSize: 13,
+            color: isRead ? t.c.accent : t.c.textFaint,
+            flexShrink: 0,
+        })} />
     );
-};
+}
 
-const ReplyBlock = ({ replyToText, replyToSenderName, isUser }) => (
-    <Box sx={{
-        display: 'flex', mb: 0.6, pl: 1, py: 0.5, pr: 1,
-        borderLeft: `3px solid ${isUser ? '#e8470a' : '#0088cc'}`,
-        bgcolor: isUser ? 'rgba(232,71,10,0.06)' : 'rgba(0,136,204,0.06)',
-        borderRadius: '0 6px 6px 0',
-    }}>
-        <Box sx={{ minWidth: 0 }}>
-            <Typography sx={{ fontSize: 10.5, fontWeight: 700, mb: 0.2, color: isUser ? '#e8470a' : '#0088cc', fontFamily: '"DM Sans", sans-serif' }}>
-                {replyToSenderName || 'Unknown'}
-            </Typography>
-            <Typography sx={{ fontSize: 11.5, color: '#9a8878', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200, fontFamily: '"DM Sans", sans-serif' }}>
-                {replyToText || '📎 Media'}
-            </Typography>
+/** `tint` is optional: without one the quote takes the app's accent, which is what a
+ *  quote inside the user's own message should use. */
+function ReplyBlock({ replyToText, replyToSenderName, tint }) {
+    return (
+        <Box sx={(t) => ({
+            display: 'flex', mb: 0.75,
+            pl: 1, py: 0.5, pr: 1,
+            borderLeft: `2px solid ${tint || t.c.accent}`,
+            bgcolor: t.c.surfaceSunken,
+            borderRadius: `0 ${radius.sm} ${radius.sm} 0`,
+            minWidth: 0,
+        })}>
+            <Box sx={{ minWidth: 0 }}>
+                <Typography noWrap sx={(t) => ({ fontSize: 11, fontWeight: 700, color: tint || t.c.accent })}>
+                    {replyToSenderName || 'Невідомий'}
+                </Typography>
+                <Typography noWrap sx={(t) => ({ fontSize: 11.5, color: t.c.textFaint, lineHeight: 1.4 })}>
+                    {replyToText || 'Медіа'}
+                </Typography>
+            </Box>
         </Box>
-    </Box>
-);
+    );
+}
 
-const ReplyButton = ({ onClick, flip }) => (
-    <Box
-        className="reply-btn"
-        onClick={onClick}
-        sx={{
-            opacity: 0, transition: 'opacity 0.15s', cursor: 'pointer',
-            width: 26, height: 26, borderRadius: '50%',
-            bgcolor: '#f0e8de', border: '1px solid #e4ddd4',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexShrink: 0, mb: 0.3,
-            '&:hover': { bgcolor: '#e8ddd0' },
-        }}
-    >
-        <ReplyIcon sx={{ fontSize: 14, color: '#8c6a50', transform: flip ? 'scaleX(-1)' : 'none' }} />
-    </Box>
-);
-
-const MessageBubble = ({ message, chat, accentColor, onReply }) => {
+/**
+ * One message.
+ *
+ * Hover actions are revealed by CSS rather than by walking the DOM and assigning
+ * `style.opacity` on mouse enter, which is what the previous version did — that broke
+ * whenever React re-rendered mid-hover and left buttons stuck visible.
+ */
+export default function MessageBubble({ message, chat, onReply, onDelete, onOpenMedia,
+                                        runEnds = true, runStarts = true, transcript }) {
     const isUser = message.isFromUser;
-    const hasText = !!message.text;
-    const hasMedia = !!message.mediaType;
+    const hasText = Boolean(message.text);
+    const hasMedia = Boolean(message.mediaType);
     const mediaOnly = hasMedia && !hasText;
-    const hasReply = !!message.replyToMessageId;
+    const hasReply = Boolean(message.replyToMessageId);
+    /**
+     * A sticker gets no bubble.
+     *
+     * It is a transparent cutout, and a white rounded card behind it reads as an empty box
+     * with something small lost in the middle — which is exactly what it looked like.
+     */
+    const bare = message.mediaType === 'sticker' && !hasText && !hasReply;
+    const networkColor = MESSENGER_COLORS[chat.messengerType] || '#8A8F98';
+
+    const senderName = message.senderName || chat.name;
 
     return (
-        <Box
-            sx={{ display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start', alignItems: 'flex-end', gap: 1, mb: 0.6 }}
-            onMouseEnter={e => { e.currentTarget.querySelectorAll('.reply-btn').forEach(b => b.style.opacity = '1'); }}
-            onMouseLeave={e => { e.currentTarget.querySelectorAll('.reply-btn').forEach(b => b.style.opacity = '0'); }}
-        >
-            {!isUser && (
-                <Avatar sx={{ width: 26, height: 26, flexShrink: 0, mb: 0.3, background: chat.avatarBase64 && chat.chatType === 'PERSONAL' ? 'none' : gradientFor(message.senderName || chat.name), fontSize: '0.65rem', fontWeight: 700, boxShadow: '0 1px 4px rgba(0,0,0,0.1)' }}>
+        <Box sx={{
+            display: 'flex',
+            justifyContent: isUser ? 'flex-end' : 'flex-start',
+            alignItems: 'flex-end',
+            gap: 0.75,
+            // Tight inside a run, loose between runs — the gap is what separates speakers.
+            mb: runEnds ? 1 : 0.2,
+            '&:hover .msg-actions': { opacity: 1, pointerEvents: 'auto' },
+        }}>
+            {/* Held open even when the avatar is hidden, so a run stays in one column
+                instead of stepping left on every line but its last. */}
+            {!isUser && !runEnds && <Box sx={{ width: 26, flexShrink: 0 }} />}
+
+            {!isUser && runEnds && (
+                <Avatar
+                    variant="rounded"
+                    sx={(t) => ({
+                        width: 26, height: 26, flexShrink: 0, mb: 0.25,
+                        borderRadius: `${radius.md}`,
+                        bgcolor: avatarTint(chat.messengerType),
+                        color: networkColor,
+                        fontSize: 10, fontWeight: 750,
+                        border: `1px solid ${t.c.border}`,
+                    })}
+                >
                     {chat.chatType === 'PERSONAL' && chat.avatarBase64
-                        ? <img src={`data:image/jpeg;base64,${chat.avatarBase64}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        : (message.senderName || chat.name)?.charAt(0)?.toUpperCase() || '?'}
+                        ? <img src={`data:image/jpeg;base64,${chat.avatarBase64}`} alt=""
+                               style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : initialsOf(senderName)}
                 </Avatar>
             )}
 
-            {!isUser && <ReplyButton onClick={() => onReply?.(message)} flip={false} />}
+            {/* Actions sit on the side the message came from, so they never cover the text
+                and never jump between sides as the conversation alternates. */}
+            {isUser && <Actions onReply={() => onReply?.(message)} onDelete={() => onDelete?.(message)} />}
 
-            <Box sx={{ maxWidth: '68%', minWidth: 0 }}>
-                {!isUser && message.senderName && chat.chatType !== 'PERSONAL' && (
-                    <Typography sx={{ fontSize: 10, fontWeight: 700, mb: 0.4, ml: 0.5, color: accentColor, fontFamily: '"DM Sans", sans-serif' }}>
+            <Box sx={{ maxWidth: 'min(68%, 640px)', minWidth: 0 }}>
+                {/* Named once per run: repeating it on every line of a burst is noise. */}
+                {runStarts && !isUser && message.senderName && chat.chatType !== 'PERSONAL' && (
+                    <Typography sx={{ fontSize: 11, fontWeight: 700, mb: 0.35, ml: 0.25, color: networkColor }}>
                         {message.senderName}
                     </Typography>
                 )}
 
-                <Box sx={{
-                    px: mediaOnly && !hasReply ? 0.5 : 1.6,
-                    pt: mediaOnly && !hasReply ? 0.5 : 1,
-                    pb: mediaOnly ? 0 : 0.8,
-                    bgcolor: isUser ? '#fde8e0' : 'white',
-                    border: `1px solid ${isUser ? '#f4c0a8' : '#ede8e1'}`,
-                    borderRadius: isUser ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                    boxShadow: '0 1px 6px rgba(26,18,8,0.06)',
+                <Box sx={(t) => ({
+                    px: bare ? 0 : mediaOnly && !hasReply ? 0.5 : 1.4,
+                    pt: bare ? 0 : mediaOnly && !hasReply ? 0.5 : 0.9,
+                    pb: bare ? 0 : mediaOnly ? 0.5 : 0.7,
+                    bgcolor: bare ? 'transparent' : isUser ? t.c.accentSoft : t.c.surface,
+                    border: `1px solid ${bare || isUser ? 'transparent' : t.c.border}`,
+                    borderRadius: isUser
+                        ? `${radius.lg} ${radius.lg} ${radius.sm} ${radius.lg}`
+                        : `${radius.lg} ${radius.lg} ${radius.lg} ${radius.sm}`,
                     overflow: 'hidden',
-                }}>
+                    // Shrink to the media rather than reserving the full 68% column, which is
+                    // what left a wide empty card beside a small image.
+                    width: 'fit-content',
+                    ...(isUser ? { ml: 'auto' } : {}),
+                })}>
                     {hasReply && (
                         <ReplyBlock
                             replyToText={message.replyToText}
                             replyToSenderName={message.replyToSenderName}
-                            isUser={isUser}
+                            tint={isUser ? undefined : networkColor}
                         />
                     )}
 
                     {hasText && (
-                        <Typography sx={{ fontSize: 13.5, lineHeight: 1.55, color: '#2d1f0f', wordBreak: 'break-word', whiteSpace: 'pre-wrap', fontFamily: '"DM Sans", sans-serif' }}>
+                        <Typography sx={(t) => ({
+                            fontSize: 13.5, lineHeight: 1.55, color: t.c.text,
+                            wordBreak: 'break-word', whiteSpace: 'pre-wrap',
+                        })}>
                             {message.text}
                         </Typography>
                     )}
-                    {hasMedia && <MessageMedia message={message} />}
 
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 0.5, mt: hasText ? 0.4 : (mediaOnly ? 0.3 : 0), px: mediaOnly ? 1 : 0, pb: mediaOnly ? 0.5 : 0 }}>
-                        <Typography sx={{ fontSize: 10, color: '#c4b5a0', lineHeight: 1, fontFamily: '"DM Sans", sans-serif' }}>
-                            {fmtTime(message.timestamp)}
+                    {hasMedia && <MessageMedia message={message} chat={chat} onOpen={onOpenMedia}
+                                               transcript={transcript} />}
+
+                    <Box sx={{
+                        display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 0.4,
+                        mt: hasText ? 0.3 : 0.2,
+                        px: mediaOnly ? 0.75 : 0,
+                    }}>
+                        <Typography sx={(t) => ({ ...numeric, fontSize: 10, color: t.c.textFaint, lineHeight: 1 })}>
+                            {formatClock(message.timestamp)}
                         </Typography>
                         {isUser && <MessageStatus isRead={message.isRead} />}
                     </Box>
                 </Box>
             </Box>
 
-            {isUser && <ReplyButton onClick={() => onReply?.(message)} flip={true} />}
+            {!isUser && <Actions onReply={() => onReply?.(message)} />}
         </Box>
     );
-};
+}
 
-export default MessageBubble;
+function Actions({ onReply, onDelete }) {
+    return (
+        <Box className="msg-actions" sx={{
+            display: 'flex', gap: 0.25, flexShrink: 0, mb: 0.25,
+            opacity: 0, pointerEvents: 'none',
+            transition: 'opacity .12s',
+        }}>
+            <Tooltip title="Відповісти">
+                <IconButton size="small" onClick={onReply} sx={{ width: 26, height: 26 }}>
+                    <ReplyIcon sx={{ fontSize: 15 }} />
+                </IconButton>
+            </Tooltip>
+            {onDelete && (
+                <Tooltip title="Видалити">
+                    <IconButton
+                        size="small" onClick={onDelete}
+                        sx={(t) => ({ width: 26, height: 26, '&:hover': { color: t.c.danger, bgcolor: t.c.accentSoft } })}
+                    >
+                        <DeleteOutlineIcon sx={{ fontSize: 15 }} />
+                    </IconButton>
+                </Tooltip>
+            )}
+        </Box>
+    );
+}

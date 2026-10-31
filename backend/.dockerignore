@@ -1,0 +1,13 @@
+# Build output — the image builds its own; copying the host's invites stale jars.
+build/
+bin/
+.gradle/
+
+# Secrets must arrive as environment variables, never baked into a layer.
+.env
+
+.idea/
+*.iml
+*.docx
+*.tmp
+patch_docx.py

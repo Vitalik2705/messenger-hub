@@ -31,7 +31,7 @@ const LoginPage = () => {
             await login(email, password);
             navigate('/dashboard');
         } catch (err) {
-            setError(err.response?.data?.message || 'Login failed');
+            setError(err.response?.data?.message || 'Помилка входу');
         } finally {
             setLoading(false);
         }
@@ -55,7 +55,7 @@ const LoginPage = () => {
                             Messenger Hub
                         </Typography>
                         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                            Sign in to your account
+                            Увійдіть до свого акаунту
                         </Typography>
 
                         {error && (
@@ -70,7 +70,7 @@ const LoginPage = () => {
                                 required
                                 fullWidth
                                 id="email"
-                                label="Email Address"
+                                label="Електронна пошта"
                                 name="email"
                                 autoComplete="email"
                                 autoFocus
@@ -82,7 +82,7 @@ const LoginPage = () => {
                                 required
                                 fullWidth
                                 name="password"
-                                label="Password"
+                                label="Пароль"
                                 type="password"
                                 id="password"
                                 autoComplete="current-password"
@@ -96,11 +96,11 @@ const LoginPage = () => {
                                 sx={{ mt: 3, mb: 2 }}
                                 disabled={loading}
                             >
-                                {loading ? 'Signing in...' : 'Sign In'}
+                                {loading ? 'Вхід...' : 'Увійти'}
                             </Button>
                             <Box sx={{ textAlign: 'center' }}>
                                 <Link component={RouterLink} to="/register" variant="body2">
-                                    Don't have an account? Sign Up
+                                    Немає акаунту? Зареєструватися
                                 </Link>
                             </Box>
                         </Box>

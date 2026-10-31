@@ -15,10 +15,15 @@ public interface MessengerAccountRepository extends JpaRepository<MessengerAccou
 
     Optional<MessengerAccount> findByUserIdAndMessengerType(Long userId, MessengerType messengerType);
 
+    List<MessengerAccount> findAllByUserIdAndMessengerType(Long userId, MessengerType messengerType);
+
+    Optional<MessengerAccount> findByUserIdAndMessengerTypeAndExternalUserId(
+            Long userId, MessengerType messengerType, String externalUserId);
+
     boolean existsByUserIdAndMessengerType(Long userId, MessengerType messengerType);
 
     List<MessengerAccount> findAllByMessengerTypeAndIsConnected(
             MessengerType messengerType,
             Boolean isConnected
-    ); // ДОДАТИ
+    );
 }

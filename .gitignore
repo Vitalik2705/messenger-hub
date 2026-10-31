@@ -15,6 +15,37 @@ telegram-service/.env
 slack-service/__pycache__/
 slack-service/.env
 
+# docker compose secrets — .env.example is the committed template
+/.env
+
+# whatsapp-web.js logged-in sessions (a browser profile, not our data)
+whatsapp-service/node_modules/
+whatsapp-service/.wwebjs_auth/
+whatsapp-service/.wwebjs_cache/
+
+discord-service/__pycache__/
+discord-service/.env
+viber-service/__pycache__/
+viber-service/.env
+
 # general
 *.log
 .DS_Store
+
+# Word crash-recovery and lock files left next to the thesis document
+~WRL*.tmp
+~$*
+# Виводи сервісів, які пише start-all.ps1
+logs/
+
+# whisper-service: virtualenvs (including the abandoned .venv-broken) and the model cache
+whisper-service/.venv*/
+whisper-service/__pycache__/
+whisper-service/models/
+
+# any service: local virtualenvs, IDE project files
+**/.venv*/
+**/.idea/
+
+# demo recordings are too large for git; they live next to the slides, not in the repo
+*.mp4

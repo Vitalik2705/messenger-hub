@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="392" viewBox="0 0 900 392" role="img" aria-label="Курсова дала збір листування з п'яти мереж в уніфікований архів; магістерська додала над цим архівом шість напрямів опрацювання листування">
+<style>
+.b{fill:none;stroke:#141A24;stroke-width:1.1;opacity:.55}
+.bh{fill:none;stroke:#C33C1B;stroke-width:1.4}
+.band{fill:none;stroke:#141A24;stroke-width:1;opacity:.28;stroke-dasharray:4 4}
+.bandh{fill:none;stroke:#C33C1B;stroke-width:1;opacity:.5;stroke-dasharray:4 4}
+.t{fill:#141A24;font-family:"Segoe UI",sans-serif;font-size:12.5px}
+.th{fill:#C33C1B;font-family:"Segoe UI",sans-serif;font-size:12.5px}
+.lab{fill:#141A24;font-family:Consolas,monospace;font-size:11px;font-weight:700;letter-spacing:.12em}
+.labh{fill:#C33C1B;font-family:Consolas,monospace;font-size:11px;font-weight:700;letter-spacing:.12em}
+.note{fill:#141A24;font-family:Consolas,monospace;font-size:10px;opacity:.62;letter-spacing:.04em}
+</style>
+<rect width="900" height="392" fill="#FFFFFF"/>
+
+<rect class="bandh" x="20" y="26" width="860" height="176" rx="3"/>
+<text class="labh" x="38" y="50">МАГІСТЕРСЬКА · ОПРАЦЮВАТИ ЗІБРАНЕ</text>
+
+<rect class="bh" x="38" y="64" width="262" height="46" rx="2"/>
+<text class="th" x="169" y="92" text-anchor="middle">пошук за змістом</text>
+
+<rect class="bh" x="318" y="64" width="262" height="46" rx="2"/>
+<text class="th" x="449" y="92" text-anchor="middle">аналітика листування моделлю</text>
+
+<rect class="bh" x="598" y="64" width="262" height="46" rx="2"/>
+<text class="th" x="729" y="92" text-anchor="middle">розшифровка голосових</text>
+
+<rect class="bh" x="38" y="126" width="262" height="46" rx="2"/>
+<text class="th" x="169" y="154" text-anchor="middle">генерація відповідей</text>
+
+<rect class="bh" x="318" y="126" width="262" height="46" rx="2"/>
+<text class="th" x="449" y="154" text-anchor="middle">дайджест і масовий аналіз</text>
+
+<rect class="bh" x="598" y="126" width="262" height="46" rx="2"/>
+<text class="th" x="729" y="154" text-anchor="middle">класифікація співрозмовників</text>
+
+<path d="M450 268 V212" stroke="#C33C1B" stroke-width="1.6" fill="none"/>
+<polygon points="444,218 450,206 456,218" fill="#C33C1B"/>
+<text class="note" x="466" y="240">усе нове працює над архівом, який дала курсова</text>
+
+<rect class="band" x="20" y="268" width="860" height="106" rx="3"/>
+<text class="lab" x="38" y="292">КУРСОВА · ЗІБРАТИ РАЗОМ</text>
+
+<rect class="b" x="38" y="304" width="196" height="50" rx="2"/>
+<text class="t" x="136" y="334" text-anchor="middle">п'ять мереж і адаптери</text>
+
+<rect class="b" x="246" y="304" width="196" height="50" rx="2"/>
+<text class="t" x="344" y="334" text-anchor="middle">уніфікований архів</text>
+
+<rect class="b" x="454" y="304" width="196" height="50" rx="2"/>
+<text class="t" x="552" y="334" text-anchor="middle">повнотекстовий пошук</text>
+
+<rect class="b" x="662" y="304" width="198" height="50" rx="2"/>
+<text class="t" x="761" y="334" text-anchor="middle">вебінтерфейс</text>
+</svg>

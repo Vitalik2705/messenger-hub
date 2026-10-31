@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="236" viewBox="0 0 880 236" role="img" aria-label="Чотири режими зростаючої автономії: вимкнено, чернетка, автовідповідь із позначкою, повна автономія; нижче — перелік запобіжників"><style>
+.svg-box{fill:none;stroke:#141A24;stroke-width:1.1;opacity:.55}
+.svg-strong{fill:none;stroke:#141A24;stroke-width:1.8}
+.svg-hot{fill:none;stroke:#C33C1B;stroke-width:1.8}
+.t{fill:#141A24;font-family:Consolas,monospace;font-size:12px}
+.tb{fill:#141A24;font-family:"Segoe UI",sans-serif;font-size:12.5px;font-weight:600}
+.ts{fill:#141A24;font-family:"Segoe UI",sans-serif;font-size:11px;opacity:.72}
+.tl{fill:#141A24;font-family:Consolas,monospace;font-size:10px;opacity:.62}
+.thot{fill:#C33C1B;font-family:Consolas,monospace;font-size:10px}
+.ln{stroke:#141A24;stroke-width:1.1;fill:none;opacity:.5}
+.ln-hot{stroke:#C33C1B;stroke-width:1.4;fill:none}
+.panel{font-family:"Segoe UI",sans-serif;font-size:12px;font-weight:700;fill:#141A24}
+</style><rect width="880" height="236" fill="#FFFFFF"/>
+        <line x1="60" y1="66" x2="820" y2="66" stroke="#141A24" stroke-width="1" opacity=".3"/>
+
+        <circle cx="100" cy="66" r="5" fill="#141A24" opacity=".55"/>
+        <text class="tb" x="100" y="46" text-anchor="middle">вимкнено</text>
+        <text class="ts" x="100" y="94" text-anchor="middle">модель мовчить</text>
+
+        <circle cx="330" cy="66" r="5" fill="#141A24" opacity=".55"/>
+        <text class="tb" x="330" y="46" text-anchor="middle">чернетка</text>
+        <text class="ts" x="330" y="94" text-anchor="middle">надсилає людина</text>
+
+        <circle cx="560" cy="66" r="5" fill="#C33C1B"/>
+        <text class="tb" x="560" y="46" text-anchor="middle">з позначкою</text>
+        <text class="ts" x="560" y="94" text-anchor="middle">видно, що це бот</text>
+
+        <circle cx="790" cy="66" r="5" fill="#C33C1B"/>
+        <text class="tb" x="790" y="46" text-anchor="middle">автономія</text>
+        <text class="ts" x="790" y="94" text-anchor="middle">лише де дозволено</text>
+
+        <text class="tl" x="60" y="122">зростання автономії · вибір робиться для кожного чату окремо</text>
+
+        <line x1="60" y1="142" x2="820" y2="142" stroke="#141A24" stroke-width="1" opacity=".18"/>
+        <text class="tl" x="60" y="166">запобіжники, спільні для всіх режимів</text>
+
+        <rect class="svg-box" x="44" y="176" width="152" height="46" rx="2"/>
+<text class="t" x="120" y="196" text-anchor="middle">пауза між</text>
+<text class="t" x="120" y="212" text-anchor="middle">відповідями</text>
+<rect class="svg-box" x="204" y="176" width="152" height="46" rx="2"/>
+<text class="t" x="280" y="196" text-anchor="middle">обмеження</text>
+<text class="t" x="280" y="212" text-anchor="middle">за добу</text>
+<rect class="svg-box" x="364" y="176" width="152" height="46" rx="2"/>
+<text class="t" x="440" y="196" text-anchor="middle">заборонені</text>
+<text class="t" x="440" y="212" text-anchor="middle">слова</text>
+<rect class="svg-box" x="524" y="176" width="152" height="46" rx="2"/>
+<text class="t" x="600" y="204" text-anchor="middle">тихі години</text>
+<rect class="svg-box" x="684" y="176" width="152" height="46" rx="2"/>
+<text class="t" x="760" y="196" text-anchor="middle">лише особисті</text>
+<text class="t" x="760" y="212" text-anchor="middle">чати</text></svg>

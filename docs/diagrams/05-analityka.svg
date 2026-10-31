@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="286" viewBox="0 0 880 286" role="img" aria-label="Чат подається у два потоки: обчислювані метрики рахує SQL без моделі, змістові питання йдуть у чергу до локальної моделі; обидва результати зводяться в один збережений запуск"><style>
+.svg-box{fill:none;stroke:#141A24;stroke-width:1.1;opacity:.55}
+.svg-strong{fill:none;stroke:#141A24;stroke-width:1.8}
+.svg-hot{fill:none;stroke:#C33C1B;stroke-width:1.8}
+.t{fill:#141A24;font-family:Consolas,monospace;font-size:12px}
+.tb{fill:#141A24;font-family:"Segoe UI",sans-serif;font-size:12.5px;font-weight:600}
+.ts{fill:#141A24;font-family:"Segoe UI",sans-serif;font-size:11px;opacity:.72}
+.tl{fill:#141A24;font-family:Consolas,monospace;font-size:10px;opacity:.62}
+.thot{fill:#C33C1B;font-family:Consolas,monospace;font-size:10px}
+.ln{stroke:#141A24;stroke-width:1.1;fill:none;opacity:.5}
+.ln-hot{stroke:#C33C1B;stroke-width:1.4;fill:none}
+.panel{font-family:"Segoe UI",sans-serif;font-size:12px;font-weight:700;fill:#141A24}
+</style><rect width="880" height="286" fill="#FFFFFF"/>
+        <rect class="svg-strong" x="8" y="108" width="132" height="58" rx="2"/>
+        <text class="tb" x="74" y="132" text-anchor="middle">чат</text>
+        <text class="ts" x="74" y="152" text-anchor="middle">останні N повідомлень</text>
+
+        <path class="ln" d="M140 126 H176 V52 H212"/><polygon points="206,48 214,52 206,56" fill="#141A24" opacity=".5"/>
+        <path class="ln-hot" d="M140 148 H176 V214 H212"/><polygon points="206,210 214,214 206,218" fill="#C33C1B"/>
+
+        <!-- верхня гілка: без моделі -->
+        <rect class="svg-box" x="214" y="26" width="196" height="52" rx="2"/>
+        <text class="t" x="312" y="48" text-anchor="middle">обчислювані метрики</text>
+        <text class="ts" x="312" y="66" text-anchor="middle">SQL: обсяг, ініціатива, час відповіді</text>
+        <text class="tl" x="214" y="94">без моделі — миттєво й безкоштовно</text>
+
+        <!-- нижня гілка: модель -->
+        <rect class="svg-hot" x="214" y="188" width="196" height="52" rx="2"/>
+        <text class="t" x="312" y="210" text-anchor="middle" fill="#C33C1B">змістові питання</text>
+        <text class="thot" x="312" y="228" text-anchor="middle">промпти, які пише користувач</text>
+
+        <path class="ln-hot" d="M410 214 H446"/><polygon points="440,210 448,214 440,218" fill="#C33C1B"/>
+        <rect class="svg-hot" x="448" y="188" width="150" height="52" rx="2"/>
+        <text class="t" x="523" y="210" text-anchor="middle" fill="#C33C1B">черга</text>
+        <text class="thot" x="523" y="228" text-anchor="middle">один потік: процесор</text>
+
+        <path class="ln-hot" d="M598 214 H634"/><polygon points="628,210 636,214 628,218" fill="#C33C1B"/>
+        <rect class="svg-hot" x="636" y="176" width="132" height="34" rx="2"/>
+        <text class="t" x="702" y="198" text-anchor="middle" fill="#C33C1B">модель A</text>
+        <rect class="svg-hot" x="636" y="218" width="132" height="34" rx="2"/>
+        <text class="t" x="702" y="240" text-anchor="middle" fill="#C33C1B">модель B</text>
+        <text class="thot" x="872" y="268" text-anchor="end">та сама розмова — двом моделям, для порівняння</text>
+
+        <!-- зведення -->
+        <path class="ln" d="M410 52 H648 V116"/><polygon points="644,110 648,118 652,110" fill="#141A24" opacity=".5"/>
+        <path class="ln-hot" d="M768 193 H812 V128 H724"/><polygon points="730,124 722,128 730,132" fill="#C33C1B"/>
+
+        <rect class="svg-strong" x="560" y="94" width="164" height="52" rx="2"/>
+        <text class="tb" x="642" y="118" text-anchor="middle">збережений запуск</text>
+        <text class="ts" x="642" y="138" text-anchor="middle">метрики + відповіді + питання</text>
+
+        
+        
+        
+        
+      </svg>
