@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="268" viewBox="0 0 900 268" role="img" aria-label="Зліва: п'ять мереж, кожна зі своїм клієнтом і своєю історією окремо. Справа: ті самі мережі сходяться в один архів, над яким працюють пошук, аналітика і дайджест"><style>
+.svg-box{fill:none;stroke:#141A24;stroke-width:1.1;opacity:.55}
+.svg-strong{fill:none;stroke:#141A24;stroke-width:1.8}
+.svg-hot{fill:none;stroke:#C33C1B;stroke-width:1.8}
+.t{fill:#141A24;font-family:Consolas,monospace;font-size:12px}
+.tb{fill:#141A24;font-family:"Segoe UI",sans-serif;font-size:12.5px;font-weight:600}
+.ts{fill:#141A24;font-family:"Segoe UI",sans-serif;font-size:11px;opacity:.72}
+.tl{fill:#141A24;font-family:Consolas,monospace;font-size:10px;opacity:.62}
+.thot{fill:#C33C1B;font-family:Consolas,monospace;font-size:10px}
+.ln{stroke:#141A24;stroke-width:1.1;fill:none;opacity:.5}
+.ln-hot{stroke:#C33C1B;stroke-width:1.4;fill:none}
+.panel{font-family:"Segoe UI",sans-serif;font-size:12px;font-weight:700;fill:#141A24}
+</style><rect width="900" height="268" fill="#FFFFFF"/>
+        <text class="panel" x="10" y="16">Було</text>
+        <text class="panel" x="480" y="16">Стало</text>
+
+        <!-- ліва частина: п'ять паралельних доріжок -->
+        <rect class="svg-box" x="10" y="34" width="112" height="30" rx="2"/>
+        <text class="t" x="66" y="54" text-anchor="middle">Telegram</text>
+        <rect class="svg-box" x="10" y="74" width="112" height="30" rx="2"/>
+        <text class="t" x="66" y="94" text-anchor="middle">Slack</text>
+        <rect class="svg-box" x="10" y="114" width="112" height="30" rx="2"/>
+        <text class="t" x="66" y="134" text-anchor="middle">Discord</text>
+        <rect class="svg-box" x="10" y="154" width="112" height="30" rx="2"/>
+        <text class="t" x="66" y="174" text-anchor="middle">WhatsApp</text>
+        <rect class="svg-box" x="10" y="194" width="112" height="30" rx="2"/>
+        <text class="t" x="66" y="214" text-anchor="middle">Viber</text>
+
+        <path class="ln" d="M122 49 H168"/><path class="ln" d="M122 89 H168"/>
+        <path class="ln" d="M122 129 H168"/><path class="ln" d="M122 169 H168"/>
+        <path class="ln" d="M122 209 H168"/>
+
+        <rect class="svg-box" x="168" y="34" width="150" height="30" rx="2"/>
+        <text class="ts" x="243" y="54" text-anchor="middle">свій клієнт · своя історія</text>
+        <rect class="svg-box" x="168" y="74" width="150" height="30" rx="2"/>
+        <text class="ts" x="243" y="94" text-anchor="middle">свій клієнт · своя історія</text>
+        <rect class="svg-box" x="168" y="114" width="150" height="30" rx="2"/>
+        <text class="ts" x="243" y="134" text-anchor="middle">свій клієнт · своя історія</text>
+        <rect class="svg-box" x="168" y="154" width="150" height="30" rx="2"/>
+        <text class="ts" x="243" y="174" text-anchor="middle">свій клієнт · своя історія</text>
+        <rect class="svg-box" x="168" y="194" width="150" height="30" rx="2"/>
+        <text class="ts" x="243" y="214" text-anchor="middle">свій клієнт · своя історія</text>
+
+        <text class="tl" x="10" y="250">п'ять паралельних доріжок, спільного нічого</text>
+
+        <line x1="400" y1="24" x2="400" y2="244" stroke="#141A24" stroke-width="1" opacity=".22"/>
+
+        <!-- права частина: збіг у спільний архів -->
+        <rect class="svg-box" x="440" y="34" width="104" height="30" rx="2"/>
+        <text class="t" x="492" y="54" text-anchor="middle">Telegram</text>
+        <rect class="svg-box" x="440" y="74" width="104" height="30" rx="2"/>
+        <text class="t" x="492" y="94" text-anchor="middle">Slack</text>
+        <rect class="svg-box" x="440" y="114" width="104" height="30" rx="2"/>
+        <text class="t" x="492" y="134" text-anchor="middle">Discord</text>
+        <rect class="svg-box" x="440" y="154" width="104" height="30" rx="2"/>
+        <text class="t" x="492" y="174" text-anchor="middle">WhatsApp</text>
+        <rect class="svg-box" x="440" y="194" width="104" height="30" rx="2"/>
+        <text class="t" x="492" y="214" text-anchor="middle">Viber</text>
+
+        <path class="ln-hot" d="M544 49 H584 V124"/>
+        <path class="ln-hot" d="M544 89 H584 V124"/>
+        <path class="ln-hot" d="M544 129 H612"/>
+        <path class="ln-hot" d="M544 169 H584 V134"/>
+        <path class="ln-hot" d="M544 209 H584 V134"/>
+
+        <rect class="svg-hot" x="612" y="94" width="126" height="70" rx="2"/>
+        <text class="tb" x="675" y="124" text-anchor="middle">спільний</text>
+        <text class="tb" x="675" y="142" text-anchor="middle">архів</text>
+
+        <path class="ln" d="M738 129 H778"/>
+        <rect class="svg-box" x="778" y="64" width="112" height="34" rx="2"/>
+        <text class="t" x="834" y="86" text-anchor="middle">пошук</text>
+        <rect class="svg-box" x="778" y="112" width="112" height="34" rx="2"/>
+        <text class="t" x="834" y="134" text-anchor="middle">аналітика</text>
+        <rect class="svg-box" x="778" y="160" width="112" height="34" rx="2"/>
+        <text class="t" x="834" y="182" text-anchor="middle">дайджест</text>
+        <path class="ln" d="M778 81 H768 V129"/>
+        <path class="ln" d="M778 177 H768 V129"/>
+
+        <text class="tl" x="440" y="250">спільний архів робить можливим те, чого не вміє жоден клієнт</text>
+      </svg>

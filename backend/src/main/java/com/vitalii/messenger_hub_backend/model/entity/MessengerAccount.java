@@ -1,6 +1,7 @@
 package com.vitalii.messenger_hub_backend.model.entity;
 
 import com.vitalii.messenger_hub_backend.model.enums.MessengerType;
+import com.vitalii.messenger_hub_backend.security.EncryptedStringConverter;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -36,17 +37,27 @@ public class MessengerAccount {
     @Column(name = "username")
     private String username;
 
+    /**
+     * For Telegram this holds the Telethon StringSession — full account access,
+     * so it is encrypted at rest.
+     */
+    @Convert(converter = EncryptedStringConverter.class)
     @Column(name = "access_token", columnDefinition = "TEXT")
     private String accessToken;
 
+    @Convert(converter = EncryptedStringConverter.class)
     @Column(name = "refresh_token", columnDefinition = "TEXT")
     private String refreshToken;
 
     @Column(name = "token_expires_at")
     private LocalDateTime tokenExpiresAt;
 
+    @Builder.Default
     @Column(name = "is_connected")
     private Boolean isConnected = true;
+
+    @Column(name = "account_label")
+    private String accountLabel;
 
     @Column(name = "last_sync_at")
     private LocalDateTime lastSyncAt;

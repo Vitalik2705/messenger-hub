@@ -6,6 +6,7 @@ import com.vitalii.messenger_hub_backend.model.dto.MessageDTO;
 import com.vitalii.messenger_hub_backend.model.entity.Chat;
 import com.vitalii.messenger_hub_backend.model.entity.MessengerAccount;
 import com.vitalii.messenger_hub_backend.model.entity.User;
+import com.vitalii.messenger_hub_backend.model.enums.ChatKind;
 import com.vitalii.messenger_hub_backend.model.enums.MessengerType;
 import com.vitalii.messenger_hub_backend.repository.ChatRepository;
 import com.vitalii.messenger_hub_backend.repository.MessengerAccountRepository;
@@ -34,29 +35,31 @@ public class SlackService {
     private final MessageRepository messageRepository;
     private final UserService userService;
     private final RestTemplate restTemplate;
+    private final MessageArchiveService messageArchiveService;
 
-    @Value("${slack.python.service.url:http://localhost:8002}")
+    @Value("${slack.python.service.url:http://localhost:8202}")
     private String pythonServiceUrl;
+
+    // ── CONNECT ───────────────────────────────────────────────────────────────
 
     @Transactional
     public MessengerAccount connectSlack(Long userId, String token) {
         User user = userService.findById(userId);
 
-        // Validate token and get user info
         HttpHeaders headers = new HttpHeaders();
         headers.set("X-Token", token);
         HttpEntity<Void> entity = new HttpEntity<>(headers);
 
         ResponseEntity<Map> response = restTemplate.exchange(
-                pythonServiceUrl + "/validate",
-                HttpMethod.GET, entity, Map.class);
+                pythonServiceUrl + "/validate", HttpMethod.GET, entity, Map.class);
 
         Map<String, Object> info = response.getBody();
         String externalUserId = (String) info.get("user_id");
         String username = (String) info.get("username");
 
+        // De-duplicate by Slack user ID
         MessengerAccount account = messengerAccountRepository
-                .findByUserIdAndMessengerType(userId, MessengerType.SLACK)
+                .findByUserIdAndMessengerTypeAndExternalUserId(userId, MessengerType.SLACK, externalUserId)
                 .orElse(MessengerAccount.builder()
                         .user(user)
                         .messengerType(MessengerType.SLACK)
@@ -67,30 +70,62 @@ public class SlackService {
         account.setAccessToken(token);
         account.setIsConnected(true);
         account.setLastSyncAt(LocalDateTime.now());
+        if (account.getAccountLabel() == null || account.getAccountLabel().isBlank()) {
+            account.setAccountLabel(username);
+        }
         messengerAccountRepository.save(account);
-
-        log.info("Slack connected for user: {}", userId);
+        log.info("Slack connected for user: {} account: {}", userId, username);
         return account;
     }
 
+    // ── ACCOUNTS ──────────────────────────────────────────────────────────────
+
+    public List<MessengerAccount> getSlackAccounts(Long userId) {
+        return messengerAccountRepository
+                .findAllByUserIdAndMessengerType(userId, MessengerType.SLACK)
+                .stream()
+                .filter(a -> Boolean.TRUE.equals(a.getIsConnected()))
+                .collect(Collectors.toList());
+    }
+
+    public MessengerAccount getSlackAccount(Long userId) {
+        return getSlackAccounts(userId).stream().findFirst().orElse(null);
+    }
+
+    // ── CHATS ─────────────────────────────────────────────────────────────────
+
     @Transactional
     public List<ChatDTO> getUserChats(Long userId) {
-        MessengerAccount account = getAccountOrThrow(userId);
+        List<MessengerAccount> accounts = getSlackAccounts(userId);
+        if (accounts.isEmpty()) return List.of();
+        List<ChatDTO> all = new ArrayList<>();
+        for (MessengerAccount account : accounts) {
+            try {
+                all.addAll(getChatsByAccount(account));
+            } catch (Exception e) {
+                log.warn("Failed to fetch Slack chats for account {}: {}", account.getId(), e.getMessage());
+            }
+        }
+        return all;
+    }
 
+    private List<ChatDTO> getChatsByAccount(MessengerAccount account) {
         HttpHeaders headers = new HttpHeaders();
         headers.set("X-Token", account.getAccessToken());
         HttpEntity<Void> entity = new HttpEntity<>(headers);
 
         ResponseEntity<List> response = restTemplate.exchange(
-                pythonServiceUrl + "/chats",
-                HttpMethod.GET, entity, List.class);
+                pythonServiceUrl + "/chats", HttpMethod.GET, entity, List.class);
         List<Map<String, Object>> rawChats = response.getBody();
+        if (rawChats == null) return List.of();
 
         List<ChatDTO> result = new ArrayList<>();
         for (Map<String, Object> raw : rawChats) {
             String externalChatId = (String) raw.get("id");
             String name = (String) raw.get("name");
             String type = (String) raw.get("type");
+            // Reported by the messenger itself; null from a service that predates the field.
+            ChatKind kind = ChatKind.parse((String) raw.get("kind"), type);
             String lastMessage = (String) raw.get("last_message");
             String lastMessageAt = (String) raw.get("last_message_at");
 
@@ -101,12 +136,15 @@ public class SlackService {
                             .messengerAccount(account)
                             .externalChatId(externalChatId)
                             .chatType(type != null ? type : "PERSONAL")
+                            .chatKind(kind)
                             .name(name)
                             .unreadCount(0)
                             .isArchived(false)
                             .build()));
 
             chat.setName(name);
+
+            chat.setChatKind(kind);
             if (lastMessageAt != null) {
                 try {
                     chat.setLastMessageAt(LocalDateTime.ofInstant(
@@ -117,9 +155,11 @@ public class SlackService {
 
             result.add(ChatDTO.builder()
                     .id(chat.getId())
+                    .messengerAccountId(account.getId())
                     .messengerType(MessengerType.SLACK)
                     .externalChatId(externalChatId)
                     .chatType(chat.getChatType())
+                    .chatKind(kind)
                     .name(name)
                     .unreadCount((Integer) raw.getOrDefault("unread_count", 0))
                     .lastMessage(lastMessage)
@@ -130,9 +170,18 @@ public class SlackService {
         return result;
     }
 
+    // ── MESSAGES ──────────────────────────────────────────────────────────────
+
     @Transactional
     public List<MessageDTO> getChatMessages(String externalChatId, Long userId) {
-        MessengerAccount account = getAccountOrThrow(userId);
+        return getChatMessages(externalChatId, userId, null);
+    }
+
+    @Transactional
+    public List<MessageDTO> getChatMessages(String externalChatId, Long userId, Long accountId) {
+        MessengerAccount account = accountId != null
+                ? resolveAccount(userId, accountId)
+                : getAccountForChatOrFirst(userId, externalChatId, MessengerType.SLACK);
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("X-Token", account.getAccessToken());
@@ -142,8 +191,9 @@ public class SlackService {
                 pythonServiceUrl + "/messages?channel_id=" + externalChatId + "&limit=50",
                 HttpMethod.GET, entity, List.class);
         List<Map<String, Object>> rawMessages = response.getBody();
+        if (rawMessages == null) return List.of();
 
-        return rawMessages.stream().map(raw -> {
+        List<MessageDTO> result = rawMessages.stream().map(raw -> {
             String timestampStr = (String) raw.get("timestamp");
             LocalDateTime timestamp;
             try {
@@ -161,10 +211,21 @@ public class SlackService {
                     .timestamp(timestamp)
                     .build();
         }).collect(Collectors.toList());
+
+        messageArchiveService.archive(account.getId(), externalChatId, result);
+        return result;
     }
 
+    // ── SEND ──────────────────────────────────────────────────────────────────
+
     public void sendMessage(Long userId, String channelId, String text) {
-        MessengerAccount account = getAccountOrThrow(userId);
+        sendMessage(userId, channelId, text, null);
+    }
+
+    public void sendMessage(Long userId, String channelId, String text, Long accountId) {
+        MessengerAccount account = accountId != null
+                ? resolveAccount(userId, accountId)
+                : getAccountForChatOrFirst(userId, channelId, MessengerType.SLACK);
 
         Map<String, Object> request = new HashMap<>();
         request.put("token", account.getAccessToken());
@@ -175,31 +236,108 @@ public class SlackService {
         log.info("Slack message sent to channel: {}", channelId);
     }
 
-    public MessengerAccount getSlackAccount(Long userId) {
-        return messengerAccountRepository
-                .findByUserIdAndMessengerType(userId, MessengerType.SLACK)
-                .orElse(null);
+    /**
+     * Uploads an attachment to a channel.
+     *
+     * Slack has no voice-note concept: a recording arrives as an audio file, and its own
+     * player handles it from there. The kind still travels along so the file gets a
+     * sensible name rather than "blob".
+     */
+    public void sendMedia(Long userId, String channelId,
+                          MediaUploadValidator.ValidatedMedia media, Long accountId) {
+        MessengerAccount account = accountId != null
+                ? resolveAccount(userId, accountId)
+                : getAccountForChatOrFirst(userId, channelId, MessengerType.SLACK);
+
+        Map<String, Object> request = new HashMap<>(media.toPayload());
+        request.put("token", account.getAccessToken());
+        request.put("channel_id", channelId);
+
+        restTemplate.postForEntity(pythonServiceUrl + "/send-media", request, Map.class);
+        log.info("Slack media sent to channel {} ({} bytes)", channelId, media.approximateBytes());
     }
 
-    private MessengerAccount getAccountOrThrow(Long userId) {
-        return messengerAccountRepository
-                .findByUserIdAndMessengerType(userId, MessengerType.SLACK)
-                .orElseThrow(() -> new CustomException("Slack not connected", HttpStatus.NOT_FOUND));
+
+    // ── DELETE ────────────────────────────────────────────────────────────────
+
+    /**
+     * Deletes a message for everyone, then drops the archived copy.
+     *
+     * Order matters: if Slack refuses the deletion the local copy is still the truth,
+     * so the archive is only cleaned once the messenger has confirmed.
+     */
+    public void deleteMessage(Long userId, String channelId, String messageId, Long accountId) {
+        MessengerAccount account = accountId != null
+                ? resolveAccount(userId, accountId)
+                : getAccountForChatOrFirst(userId, channelId, MessengerType.SLACK);
+
+        Map<String, Object> request = new HashMap<>();
+        request.put("token", account.getAccessToken());
+        request.put("channel_id", channelId);
+        request.put("message_id", messageId);
+
+        restTemplate.postForEntity(pythonServiceUrl + "/delete", request, Map.class);
+        messageArchiveService.forget(account.getId(), channelId, messageId);
+        log.info("Slack message {} deleted", messageId);
     }
+
+    // ── DISCONNECT ────────────────────────────────────────────────────────────
 
     @Transactional
     public void disconnect(Long userId) {
-        messengerAccountRepository
-                .findByUserIdAndMessengerType(userId, MessengerType.SLACK)
-                .ifPresent(account -> {
-                    account.setIsConnected(false);
-                    account.setAccessToken(null);
-                    messengerAccountRepository.save(account);
-                });
-        log.info("Slack disconnected for user: {}", userId);
+        disconnect(userId, null);
+    }
+
+    @Transactional
+    public void disconnect(Long userId, Long accountId) {
+        if (accountId != null) {
+            messengerAccountRepository.findById(accountId)
+                    .filter(a -> a.getUser().getId().equals(userId))
+                    .ifPresent(a -> {
+                        a.setIsConnected(false);
+                        a.setAccessToken(null);
+                        messengerAccountRepository.save(a);
+                    });
+        } else {
+            getSlackAccounts(userId).forEach(a -> {
+                a.setIsConnected(false);
+                a.setAccessToken(null);
+                messengerAccountRepository.save(a);
+            });
+        }
+        log.info("Slack disconnected for user: {} accountId: {}", userId, accountId);
     }
 
     public void syncChats(MessengerAccount account) {
         getUserChats(account.getUser().getId());
+    }
+
+    // ── HELPERS ───────────────────────────────────────────────────────────────
+
+    private MessengerAccount resolveAccount(Long userId, Long accountId) {
+        MessengerAccount account = messengerAccountRepository.findById(accountId)
+                .orElseThrow(() -> new CustomException("Account not found", HttpStatus.NOT_FOUND));
+        if (!account.getUser().getId().equals(userId)) {
+            throw new CustomException("Access denied", HttpStatus.FORBIDDEN);
+        }
+        if (!Boolean.TRUE.equals(account.getIsConnected())) {
+            throw new CustomException("Account is disconnected", HttpStatus.BAD_REQUEST);
+        }
+        return account;
+    }
+
+    private MessengerAccount getAccountForChatOrFirst(Long userId, String externalChatId, MessengerType type) {
+        return chatRepository.findFirstByUserIdAndExternalChatId(userId, externalChatId)
+                .map(Chat::getMessengerAccount)
+                .orElseGet(() -> getFirstAccountOrThrow(userId, type));
+    }
+
+    private MessengerAccount getFirstAccountOrThrow(Long userId, MessengerType type) {
+        return messengerAccountRepository
+                .findAllByUserIdAndMessengerType(userId, type)
+                .stream()
+                .filter(a -> Boolean.TRUE.equals(a.getIsConnected()))
+                .findFirst()
+                .orElseThrow(() -> new CustomException(type + " not connected", HttpStatus.NOT_FOUND));
     }
 }

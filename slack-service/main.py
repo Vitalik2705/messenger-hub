@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
+import base64
 import os
 from dotenv import load_dotenv
 from datetime import datetime, timezone
@@ -15,6 +16,17 @@ class SendMessageRequest(BaseModel):
     token: str
     channel_id: str
     text: str
+
+
+class SendMediaRequest(BaseModel):
+    token: str
+    channel_id: str
+    data_base64: str
+    mime_type: str = "application/octet-stream"
+    file_name: str = "file.bin"
+    kind: str = "FILE"
+    duration_seconds: int | None = None
+    caption: str | None = None
 
 
 def format_timestamp(ts: str) -> str:
@@ -52,10 +64,15 @@ async def get_chats(x_token: str = Header(...)):
             for channel in ims["channels"]:
                 user_id = channel.get("user")
                 name = "Unknown"
+                # Slack позначає ботів прапорцем на профілі — беремо його звідти,
+                # поки все одно ходимо за іменем.
+                kind = "PERSON"
                 if user_id:
                     try:
                         user_info = client.users_info(user=user_id)
                         name = user_info["user"]["real_name"] or user_info["user"]["name"]
+                        if user_info["user"].get("is_bot"):
+                            kind = "BOT"
                     except Exception as e:
                         print(f"Error getting user info: {e}")
                         name = user_id
@@ -74,6 +91,7 @@ async def get_chats(x_token: str = Header(...)):
                     "id": channel["id"],
                     "name": name,
                     "type": "PERSONAL",
+                    "kind": kind,
                     "last_message": last_message,
                     "last_message_at": last_message_at,
                     "unread_count": 0
@@ -102,6 +120,7 @@ async def get_chats(x_token: str = Header(...)):
                     "id": channel["id"],
                     "name": "#" + channel["name"],
                     "type": "GROUP",
+                    "kind": "GROUP",
                     "last_message": last_message,
                     "last_message_at": last_message_at,
                     "unread_count": 0
@@ -155,6 +174,53 @@ async def get_messages(channel_id: str, limit: int = 50, x_token: str = Header(.
 
         return result
 
+    except SlackApiError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class DeleteMessageRequest(BaseModel):
+    token: str
+    channel_id: str
+    message_id: str
+
+
+@app.post("/delete")
+async def delete_message(req: DeleteMessageRequest):
+    """Видаляє повідомлення. message_id у Slack — це ts повідомлення."""
+    client = WebClient(token=req.token)
+    try:
+        client.chat_delete(channel=req.channel_id, ts=req.message_id)
+        return {"success": True}
+    except SlackApiError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/send-media")
+async def send_media(req: SendMediaRequest):
+    """Завантажує вкладення в канал.
+
+    У Slack немає окремого типу «голосове» — запис приходить звичайним аудіофайлом,
+    який його власний плеєр програє. Тому kind тут впливає лише на підпис.
+    """
+    client = WebClient(token=req.token)
+    try:
+        raw = base64.b64decode(req.data_base64)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Не вдалося декодувати вкладення")
+    if not raw:
+        raise HTTPException(status_code=400, detail="Порожнє вкладення")
+
+    title = "Голосове повідомлення" if req.kind == "VOICE" else req.file_name
+    try:
+        # files_upload_v2, бо files.upload вимкнено на нових воркспейсах.
+        response = client.files_upload_v2(
+            channel=req.channel_id,
+            file=raw,
+            filename=req.file_name,
+            title=title,
+            initial_comment=req.caption or None,
+        )
+        return {"file_id": response["file"]["id"]}
     except SlackApiError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

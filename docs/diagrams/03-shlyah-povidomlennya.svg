@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="212" viewBox="0 0 880 212" role="img" aria-label="Повідомлення йде з мережі через адаптер в архіватор ядра, зберігається в таблиці повідомлень і потрапляє у два індекси: повнотекстовий і векторний"><style>
+.svg-box{fill:none;stroke:#141A24;stroke-width:1.1;opacity:.55}
+.svg-strong{fill:none;stroke:#141A24;stroke-width:1.8}
+.svg-hot{fill:none;stroke:#C33C1B;stroke-width:1.8}
+.t{fill:#141A24;font-family:Consolas,monospace;font-size:12px}
+.tb{fill:#141A24;font-family:"Segoe UI",sans-serif;font-size:12.5px;font-weight:600}
+.ts{fill:#141A24;font-family:"Segoe UI",sans-serif;font-size:11px;opacity:.72}
+.tl{fill:#141A24;font-family:Consolas,monospace;font-size:10px;opacity:.62}
+.thot{fill:#C33C1B;font-family:Consolas,monospace;font-size:10px}
+.ln{stroke:#141A24;stroke-width:1.1;fill:none;opacity:.5}
+.ln-hot{stroke:#C33C1B;stroke-width:1.4;fill:none}
+.panel{font-family:"Segoe UI",sans-serif;font-size:12px;font-weight:700;fill:#141A24}
+</style><rect width="880" height="212" fill="#FFFFFF"/>
+        <rect class="svg-box" x="8" y="74" width="128" height="52" rx="2"/>
+        <text class="t" x="72" y="97" text-anchor="middle">мережа</text>
+        
+
+        <path class="ln" d="M136 100 H186"/><polygon points="180,96 188,100 180,104" fill="#141A24" opacity=".5"/>
+
+        <rect class="svg-box" x="188" y="74" width="128" height="52" rx="2"/>
+        <text class="t" x="252" y="97" text-anchor="middle">адаптер</text>
+        
+
+        <path class="ln" d="M316 100 H366"/><polygon points="360,96 368,100 360,104" fill="#141A24" opacity=".5"/>
+        <text class="tl" x="322" y="90">JSON</text>
+
+        <rect class="svg-strong" x="368" y="74" width="140" height="52" rx="2"/>
+        <text class="tb" x="438" y="97" text-anchor="middle">архіватор</text>
+        
+
+        <path class="ln" d="M508 100 H558"/><polygon points="552,96 560,100 552,104" fill="#141A24" opacity=".5"/>
+
+        <rect class="svg-box" x="560" y="74" width="126" height="52" rx="2"/>
+        <text class="t" x="623" y="97" text-anchor="middle">messages</text>
+        
+
+        <path class="ln" d="M686 100 H714 V40 H746"/><polygon points="740,36 748,40 740,44" fill="#141A24" opacity=".5"/>
+        <path class="ln" d="M686 100 H714 V160 H746"/><polygon points="740,156 748,160 740,164" fill="#141A24" opacity=".5"/>
+
+        <rect class="svg-box" x="748" y="18" width="124" height="44" rx="2"/>
+        <text class="t" x="810" y="38" text-anchor="middle">tsvector</text>
+        <text class="ts" x="810" y="54" text-anchor="middle">індекс GIN</text>
+
+        <rect class="svg-hot" x="748" y="138" width="124" height="44" rx="2"/>
+        <text class="t" x="810" y="158" text-anchor="middle" fill="#C33C1B">вектори</text>
+        <text class="thot" x="810" y="174" text-anchor="middle">ембединги</text>
+
+        
+      </svg>

@@ -35,6 +35,7 @@ public class User {
     @Column(name = "last_name")
     private String lastName;
 
+    @Builder.Default
     @Column(name = "is_active")
     private Boolean isActive = false;
 
@@ -46,6 +47,7 @@ public class User {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(name = "role")
     private UserRole role = UserRole.USER;

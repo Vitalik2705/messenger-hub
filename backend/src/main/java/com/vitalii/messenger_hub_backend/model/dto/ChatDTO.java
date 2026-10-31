@@ -1,5 +1,6 @@
 package com.vitalii.messenger_hub_backend.model.dto;
 
+import com.vitalii.messenger_hub_backend.model.enums.ChatKind;
 import com.vitalii.messenger_hub_backend.model.enums.MessengerType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -14,9 +15,12 @@ import java.time.LocalDateTime;
 @Builder
 public class ChatDTO {
     private Long id;
+    private Long messengerAccountId;
     private MessengerType messengerType;
     private String externalChatId;
     private String chatType;
+    /** Person, bot, channel, group or service account — as the messenger reports it. */
+    private ChatKind chatKind;
     private String name;
     private String avatarUrl;
     private Integer unreadCount;

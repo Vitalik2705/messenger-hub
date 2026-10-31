@@ -10,7 +10,15 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "messages")
+@Table(
+        name = "messages",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_messages_chat_external",
+                columnNames = {"chat_id", "external_message_id"}),
+        indexes = @Index(
+                name = "idx_messages_chat_timestamp",
+                columnList = "chat_id, timestamp")
+)
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -40,8 +48,23 @@ public class Message {
     @Column(name = "attachments", columnDefinition = "TEXT")
     private String attachments; // JSON
 
+    @Builder.Default
     @Column(name = "is_from_user")
     private Boolean isFromUser = false;
+
+    /**
+     * What a voice message said.
+     *
+     * Kept beside the text rather than written into it: the record of what was actually
+     * sent must stay a record of what was sent. A transcript is a derived reading, it can
+     * be wrong, and everything showing it says so.
+     */
+    @Column(name = "transcript", columnDefinition = "TEXT")
+    private String transcript;
+
+    /** PENDING, DONE, FAILED, SKIPPED — so a failed clip is not retried forever. */
+    @Column(name = "transcript_status", length = 16)
+    private String transcriptStatus;
 
     @Column(name = "status")
     private String status; // SENT, DELIVERED, READ

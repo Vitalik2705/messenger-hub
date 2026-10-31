@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.env
+.idea/
+*.iml
+.venv/
+.venv-broken/
+venv/
+models/
+*.wav
+*.ogg

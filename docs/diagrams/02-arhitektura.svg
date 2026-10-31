@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="372" viewBox="0 0 900 372" role="img" aria-label="Браузер звертається до ядра; ядро працює з базою даних і локальними моделями, а з мережами спілкується через п'ять окремих адаптерів"><style>
+.svg-box{fill:none;stroke:#141A24;stroke-width:1.1;opacity:.55}
+.svg-strong{fill:none;stroke:#141A24;stroke-width:1.8}
+.svg-hot{fill:none;stroke:#C33C1B;stroke-width:1.8}
+.t{fill:#141A24;font-family:Consolas,monospace;font-size:12px}
+.tb{fill:#141A24;font-family:"Segoe UI",sans-serif;font-size:12.5px;font-weight:600}
+.ts{fill:#141A24;font-family:"Segoe UI",sans-serif;font-size:11px;opacity:.72}
+.tl{fill:#141A24;font-family:Consolas,monospace;font-size:10px;opacity:.62}
+.thot{fill:#C33C1B;font-family:Consolas,monospace;font-size:10px}
+.ln{stroke:#141A24;stroke-width:1.1;fill:none;opacity:.5}
+.ln-hot{stroke:#C33C1B;stroke-width:1.4;fill:none}
+.panel{font-family:"Segoe UI",sans-serif;font-size:12px;font-weight:700;fill:#141A24}
+</style><rect width="900" height="372" fill="#FFFFFF"/>
+        <rect class="svg-box" x="350" y="8" width="200" height="40" rx="2"/>
+        <text class="tb" x="450" y="33" text-anchor="middle">Браузер · React</text>
+        <path class="ln" d="M450 48 V78"/>
+        <polygon points="446,72 450,80 454,72" fill="#141A24" opacity=".5"/>
+        <text class="tl" x="462" y="68">REST + WebSocket</text>
+
+        <rect class="svg-strong" x="178" y="82" width="544" height="66" rx="2"/>
+        <text class="tb" x="450" y="110" text-anchor="middle">Ядро · Spring Boot</text>
+        <text class="ts" x="450" y="132" text-anchor="middle">архів · пошук · аналітика · планувальник · шифрування</text>
+
+        <rect class="svg-box" x="8" y="92" width="150" height="46" rx="2"/>
+        <text class="t" x="83" y="111" text-anchor="middle">PostgreSQL</text>
+        <text class="ts" x="83" y="128" text-anchor="middle">архів і індекси</text>
+        <path class="ln" d="M158 115 H178"/>
+        <polygon points="172,111 180,115 172,119" fill="#141A24" opacity=".5"/>
+
+        <rect class="svg-hot" x="742" y="92" width="150" height="46" rx="2"/>
+        <text class="t" x="817" y="111" text-anchor="middle" fill="#C33C1B">Ollama · Whisper</text>
+        <text class="thot" x="817" y="128" text-anchor="middle">на цій же машині</text>
+        <path class="ln-hot" d="M722 115 H742"/>
+
+        <path class="ln" d="M450 148 V186"/>
+        <polygon points="446,180 450,188 454,180" fill="#141A24" opacity=".5"/>
+        <text class="tl" x="462" y="174">HTTP / JSON</text>
+
+        <rect class="svg-box" x="8" y="190" width="164" height="56" rx="2"/>
+        <text class="t" x="90" y="214" text-anchor="middle">telegram</text>
+        <text class="ts" x="90" y="232" text-anchor="middle">Python · Telethon</text>
+
+        <rect class="svg-box" x="186" y="190" width="164" height="56" rx="2"/>
+        <text class="t" x="268" y="214" text-anchor="middle">slack</text>
+        <text class="ts" x="268" y="232" text-anchor="middle">Python · slack-sdk</text>
+
+        <rect class="svg-box" x="364" y="190" width="164" height="56" rx="2"/>
+        <text class="t" x="446" y="214" text-anchor="middle">discord</text>
+        <text class="ts" x="446" y="232" text-anchor="middle">JDA · Python</text>
+
+        <rect class="svg-box" x="542" y="190" width="164" height="56" rx="2"/>
+        <text class="t" x="624" y="214" text-anchor="middle">whatsapp</text>
+        <text class="ts" x="624" y="232" text-anchor="middle">Node · web.js</text>
+
+        <rect class="svg-box" x="720" y="190" width="172" height="56" rx="2"/>
+        <text class="t" x="806" y="214" text-anchor="middle">viber</text>
+        <text class="ts" x="806" y="232" text-anchor="middle">Python · REST</text>
+
+        <path class="ln" d="M90 246 V282"/><polygon points="86,276 90,284 94,276" fill="#141A24" opacity=".5"/>
+        <path class="ln" d="M268 246 V282"/><polygon points="264,276 268,284 272,276" fill="#141A24" opacity=".5"/>
+        <path class="ln" d="M446 246 V282"/><polygon points="442,276 446,284 450,276" fill="#141A24" opacity=".5"/>
+        <path class="ln" d="M624 246 V282"/><polygon points="620,276 624,284 628,276" fill="#141A24" opacity=".5"/>
+        <path class="ln" d="M806 246 V282"/><polygon points="802,276 806,284 810,276" fill="#141A24" opacity=".5"/>
+
+        <rect class="svg-box" x="8" y="286" width="164" height="38" rx="2"/>
+        <text class="t" x="90" y="310" text-anchor="middle">Telegram</text>
+        <rect class="svg-box" x="186" y="286" width="164" height="38" rx="2"/>
+        <text class="t" x="268" y="310" text-anchor="middle">Slack</text>
+        <rect class="svg-box" x="364" y="286" width="164" height="38" rx="2"/>
+        <text class="t" x="446" y="310" text-anchor="middle">Discord</text>
+        <rect class="svg-box" x="542" y="286" width="164" height="38" rx="2"/>
+        <text class="t" x="624" y="310" text-anchor="middle">WhatsApp</text>
+        <rect class="svg-box" x="720" y="286" width="172" height="38" rx="2"/>
+        <text class="t" x="806" y="310" text-anchor="middle">Viber</text>
+
+        
+      </svg>

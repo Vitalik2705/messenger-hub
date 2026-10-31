@@ -1,0 +1,162 @@
+# Messenger Hub — the whole platform in one command.
+#
+#   cp .env.example .env      # then fill in the secrets
+#   docker compose up --build
+#
+# Only the frontend and the backend are published to the host. The messenger and model
+# services are reachable inside the network only: they hold live sessions and take no
+# authentication of their own, so exposing them would hand anyone on the machine a way
+# to read the user's chats.
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-messenger_hub}
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    volumes:
+      # Postgres 18 expects the mount one level up from the old /data path: the server
+      # puts its cluster in a version-named subdirectory so pg_upgrade can work across
+      # versions without crossing a mount boundary. Mounting /data directly makes the
+      # image refuse to start.
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      # The backend creates its schema on startup, so it must not merely find the port
+      # open — it needs a server that is actually ready to answer.
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-messenger_hub}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [hub]
+
+  backend:
+    build:
+      context: ./backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-messenger_hub}
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in .env}
+
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-messenger_hub_bot}
+
+      # Service names, not localhost: inside a container localhost is the container.
+      # Same ports as a hand-started stack (start-all.ps1), so one set of numbers holds
+      # everywhere.
+      TELEGRAM_SERVICE_URL: http://telegram-service:8201
+      SLACK_SERVICE_URL: http://slack-service:8202
+      DISCORD_SERVICE_URL: http://discord-service:8203
+      WHATSAPP_SERVICE_URL: http://whatsapp-service:8204
+      VIBER_SERVICE_URL: http://viber-service:8205
+      WHISPER_URL: http://whisper-service:8206
+
+      # The language model. By default the Ollama already running on the host, which
+      # already has its models pulled — several GB that would otherwise be downloaded
+      # again into a container. To run it in Docker instead:
+      #   OLLAMA_URL=http://ollama:11434 docker compose --profile ollama up
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+
+      APP_CORS_ALLOWED_ORIGINS: ${FRONTEND_ORIGIN:-http://localhost:5273}
+    ports:
+      - "${BACKEND_PORT:-8279}:8279"
+    # Docker Desktop resolves host.docker.internal by itself; on Linux it has to be
+    # mapped, or the default OLLAMA_URL points nowhere.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    networks: [hub]
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Read by the browser, so it must be the published address of the backend on
+        # the host — the compose service name would not resolve there.
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8279}
+    depends_on: [backend]
+    ports:
+      - "${FRONTEND_PORT:-5273}:80"
+    restart: unless-stopped
+    networks: [hub]
+
+  telegram-service:
+    build:
+      context: ./telegram-service
+    environment:
+      # Not marked required: someone testing only Slack should still get a working
+      # stack. The service refuses to start on its own if these are missing, with a
+      # message that says what to do about it.
+      API_ID: ${TELEGRAM_API_ID:-}
+      API_HASH: ${TELEGRAM_API_HASH:-}
+    restart: unless-stopped
+    networks: [hub]
+
+  slack-service:
+    build:
+      context: ./slack-service
+    restart: unless-stopped
+    networks: [hub]
+
+  discord-service:
+    build:
+      context: ./discord-service
+    restart: unless-stopped
+    networks: [hub]
+
+  viber-service:
+    build:
+      context: ./viber-service
+    restart: unless-stopped
+    networks: [hub]
+
+  whatsapp-service:
+    build:
+      context: ./whatsapp-service
+    volumes:
+      # Logged-in WhatsApp sessions. Without this the user rescans the QR code on
+      # every restart, since the login lives in the browser profile, not in our database.
+      - whatsapp-auth:/service/.wwebjs_auth
+    restart: unless-stopped
+    networks: [hub]
+
+  whisper-service:
+    build:
+      context: ./whisper-service
+    environment:
+      WHISPER_MODEL: ${WHISPER_MODEL:-small}
+      WHISPER_LANGUAGE: uk
+    volumes:
+      # The model downloads on the first transcription; keep it across rebuilds.
+      - whisper-models:/home/service/.cache/huggingface
+    restart: unless-stopped
+    networks: [hub]
+
+  # Optional: only started with --profile ollama. Pull the models once after it is up:
+  #   docker compose exec ollama ollama pull qwen2.5:7b
+  #   docker compose exec ollama ollama pull nomic-embed-text
+  ollama:
+    image: ollama/ollama:latest
+    profiles: [ollama]
+    volumes:
+      - ollama-models:/root/.ollama
+    restart: unless-stopped
+    networks: [hub]
+
+volumes:
+  postgres-data:
+  whatsapp-auth:
+  whisper-models:
+  ollama-models:
+
+networks:
+  hub:
+    driver: bridge

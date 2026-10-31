@@ -1,6 +1,9 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8079/api';
+// Baked in at build time. The browser resolves this, not the container, so in Docker it
+// is the address the backend is published on — never the compose service name.
+export const SERVER_URL = import.meta.env.VITE_API_URL || 'http://localhost:8279';
+const API_BASE_URL = `${SERVER_URL}/api`;
 
 const api = axios.create({
     baseURL: API_BASE_URL,

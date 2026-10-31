@@ -39,7 +39,7 @@ const RegisterPage = () => {
         setError('');
 
         if (formData.password !== formData.confirmPassword) {
-            setError('Passwords do not match');
+            setError('Паролі не збігаються');
             return;
         }
 
@@ -49,7 +49,7 @@ const RegisterPage = () => {
             await register(formData);
             navigate('/dashboard');
         } catch (err) {
-            setError(err.response?.data?.message || 'Registration failed');
+            setError(err.response?.data?.message || 'Помилка реєстрації');
         } finally {
             setLoading(false);
         }
@@ -70,10 +70,10 @@ const RegisterPage = () => {
                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                         <PersonAddIcon sx={{ fontSize: 40, color: 'primary.main', mb: 2 }} />
                         <Typography component="h1" variant="h5" fontWeight="bold" gutterBottom>
-                            Create Account
+                            Створити акаунт
                         </Typography>
                         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                            Sign up for Messenger Hub
+                            Зареєструйтесь у Messenger Hub
                         </Typography>
 
                         {error && (
@@ -88,7 +88,7 @@ const RegisterPage = () => {
                                 required
                                 fullWidth
                                 id="email"
-                                label="Email Address"
+                                label="Електронна пошта"
                                 name="email"
                                 autoComplete="email"
                                 autoFocus
@@ -99,7 +99,7 @@ const RegisterPage = () => {
                                 margin="normal"
                                 fullWidth
                                 id="firstName"
-                                label="First Name"
+                                label="Ім'я"
                                 name="firstName"
                                 value={formData.firstName}
                                 onChange={handleChange}
@@ -108,7 +108,7 @@ const RegisterPage = () => {
                                 margin="normal"
                                 fullWidth
                                 id="lastName"
-                                label="Last Name"
+                                label="Прізвище"
                                 name="lastName"
                                 value={formData.lastName}
                                 onChange={handleChange}
@@ -118,7 +118,7 @@ const RegisterPage = () => {
                                 required
                                 fullWidth
                                 name="password"
-                                label="Password"
+                                label="Пароль"
                                 type="password"
                                 id="password"
                                 value={formData.password}
@@ -129,7 +129,7 @@ const RegisterPage = () => {
                                 required
                                 fullWidth
                                 name="confirmPassword"
-                                label="Confirm Password"
+                                label="Підтвердіть пароль"
                                 type="password"
                                 id="confirmPassword"
                                 value={formData.confirmPassword}
@@ -142,11 +142,11 @@ const RegisterPage = () => {
                                 sx={{ mt: 3, mb: 2 }}
                                 disabled={loading}
                             >
-                                {loading ? 'Creating Account...' : 'Sign Up'}
+                                {loading ? 'Створення акаунту...' : 'Зареєструватися'}
                             </Button>
                             <Box sx={{ textAlign: 'center' }}>
                                 <Link component={RouterLink} to="/login" variant="body2">
-                                    Already have an account? Sign In
+                                    Вже є акаунт? Увійти
                                 </Link>
                             </Box>
                         </Box>
