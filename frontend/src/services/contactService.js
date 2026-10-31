@@ -21,8 +21,6 @@ const contactService = {
     link: (identityAId, identityBId) => api.post('/contacts/link', { identityAId, identityBId }),
 
     unlink: (identityId) => api.post(`/contacts/identities/${identityId}/unlink`),
-
-    rename: (contactId, displayName) => api.patch(`/contacts/${contactId}`, { displayName }),
 };
 
 export default contactService;

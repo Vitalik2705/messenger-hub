@@ -1,15 +1,11 @@
 import { createTheme } from '@mui/material';
-import { FONT_STACK, palettes, radius } from './tokens';
+import { FONT_STACK, palettes, radius, ACCENTS } from './tokens';
 
-/**
- * Builds the MUI theme for a mode.
- *
- * The tokens are attached as `theme.c` so components can reach them through `sx` callbacks
- * without importing the palette themselves — that import is what would otherwise let a
- * literal colour creep back in and break dark mode silently.
- */
-export function buildTheme(mode) {
-    const c = palettes[mode] || palettes.light;
+/** Builds the MUI theme for a mode. Tokens are attached as `theme.c` for `sx` callbacks. */
+export function buildTheme(mode, accent = 'coral', bubbles = 'filled') {
+    const base = palettes[mode] || palettes.light;
+    const preset = ACCENTS[accent] || ACCENTS.coral;
+    const c = { ...base, ...(mode === 'dark' ? preset.dark : preset.light), bubbles };
 
     return createTheme({
         c,
@@ -38,12 +34,8 @@ export function buildTheme(mode) {
             MuiCssBaseline: {
                 styleOverrides: {
                     /**
-                     * The same tokens as CSS custom properties.
-                     *
-                     * `sx` only reaches the theme through a callback, which every static
-                     * style object would have to be rewritten into. A variable works inside
-                     * a plain object and still re-resolves when the mode changes, so the
-                     * long tail of components stays theme-aware without being rewritten.
+                     * The same tokens as CSS custom properties, for static style objects that
+                     * cannot use a theme callback.
                      */
                     ':root': {
                         '--c-bg': c.bg,
@@ -64,6 +56,9 @@ export function buildTheme(mode) {
                         '--c-danger': c.danger,
                         '--c-success': c.success,
                     },
+                    // Presentation mode: someone else's words stay blurred until pointed at.
+                    'body.presenting [data-private]': { filter: 'blur(5px)', transition: 'filter .15s' },
+                    'body.presenting [data-private]:hover': { filter: 'none' },
                     body: {
                         backgroundColor: c.bg,
                         color: c.text,

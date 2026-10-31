@@ -39,20 +39,14 @@ public class Chat {
     private String chatType; // PERSONAL, GROUP, CHANNEL
 
     /**
-     * Who is on the other side, as the messenger itself reports it. Finer than chatType,
-     * which cannot tell a friend from a news channel or a bot.
+     * What is on the other side, as the messenger reports it. Finer than chatType, which cannot
+     * tell a friend from a channel or a bot.
      */
     @Enumerated(EnumType.STRING)
     @Column(name = "chat_kind", length = 16)
     private ChatKind chatKind;
 
-    /**
-     * Whether the model may write here, and how far it may go.
-     *
-     * Deliberately a property of the chat rather than a global setting: turning generation
-     * on is a decision about one specific person, and there is no sensible way to make it
-     * once for everybody the user has ever messaged. Null means OFF.
-     */
+    /** Whether and how far the model may write in this chat. Per chat by design; null means OFF. */
     @Enumerated(EnumType.STRING)
     @Column(name = "auto_reply_mode", length = 16)
     private AutoReplyMode autoReplyMode;
@@ -66,8 +60,8 @@ public class Chat {
     @Column(name = "avatar_base64", columnDefinition = "TEXT")
     private String avatarBase64;
 
-    // Значення за замовчуванням тут потрібні саме будівнику: без @Builder.Default
-    // Lombok ігнорує ініціалізатор поля, і Chat.builder()...build() дає null.
+    // Without @Builder.Default Lombok ignores the field initialiser and
+    // Chat.builder()...build() leaves these null.
     @Builder.Default
     @Column(name = "unread_count")
     private Integer unreadCount = 0;

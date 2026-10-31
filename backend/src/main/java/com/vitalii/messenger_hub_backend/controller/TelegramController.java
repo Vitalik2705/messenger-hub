@@ -62,9 +62,14 @@ public class TelegramController {
     @GetMapping("/chats")
     public ResponseEntity<List<ChatDTO>> getChats(
             @AuthenticationPrincipal UserDetails userDetails,
-            @RequestParam(required = false) Long accountId) {
+            @RequestParam(required = false) Long accountId,
+            // Polls pass false: the client already holds every avatar from the first load,
+            // and with them a refresh weighs megabytes instead of kilobytes.
+            @RequestParam(defaultValue = "true") boolean avatars) {
         User user = userService.findByEmail(userDetails.getUsername());
-        return ResponseEntity.ok(telegramService.getUserChats(user.getId(), accountId));
+        List<ChatDTO> chats = telegramService.getUserChats(user.getId(), accountId);
+        if (!avatars) chats.forEach(chat -> chat.setAvatarBase64(null));
+        return ResponseEntity.ok(chats);
     }
 
     @PostMapping("/toggle-pin/{externalChatId}")
@@ -112,12 +117,7 @@ public class TelegramController {
         return ResponseEntity.ok(result);
     }
 
-    /**
-     * Sends an attachment — picture, file, or voice note.
-     *
-     * Validation happens before the messenger is touched, so an oversized or malformed
-     * upload is rejected here rather than surfacing as an obscure failure from Telegram.
-     */
+    /** Sends a picture, file or voice note, validated before Telegram is called. */
     @PostMapping("/send-media")
     public ResponseEntity<?> sendMedia(
             @RequestBody SendMediaRequest request,
@@ -139,6 +139,56 @@ public class TelegramController {
             @RequestParam(required = false) Long accountId) {
         User user = userService.findByEmail(userDetails.getUsername());
         return ResponseEntity.ok(telegramService.getUserStatus(user.getId(), chatId, accountId));
+    }
+
+    @PostMapping("/react")
+    public ResponseEntity<Map<String, Object>> react(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestBody Map<String, Object> request,
+            @RequestParam(required = false) Long accountId) {
+        User user = userService.findByEmail(userDetails.getUsername());
+        return ResponseEntity.ok(telegramService.react(user.getId(),
+                String.valueOf(request.get("chat_id")), String.valueOf(request.get("message_id")),
+                (String) request.get("emoji"), accountId));
+    }
+
+    @PostMapping("/edit")
+    public ResponseEntity<Map<String, Object>> edit(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestBody Map<String, Object> request,
+            @RequestParam(required = false) Long accountId) {
+        User user = userService.findByEmail(userDetails.getUsername());
+        return ResponseEntity.ok(telegramService.editMessage(user.getId(),
+                String.valueOf(request.get("chat_id")), String.valueOf(request.get("message_id")),
+                String.valueOf(request.get("text")), accountId));
+    }
+
+    @GetMapping("/typing/{chatId}")
+    public ResponseEntity<Map<String, Object>> isTyping(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable String chatId,
+            @RequestParam(required = false) Long accountId) {
+        User user = userService.findByEmail(userDetails.getUsername());
+        return ResponseEntity.ok(telegramService.isTyping(user.getId(), chatId, accountId));
+    }
+
+    @PostMapping("/typing/{chatId}")
+    public ResponseEntity<Map<String, Object>> sendTyping(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable String chatId,
+            @RequestParam(required = false) Long accountId) {
+        User user = userService.findByEmail(userDetails.getUsername());
+        telegramService.sendTyping(user.getId(), chatId, accountId);
+        return ResponseEntity.ok(Map.of("success", true));
+    }
+
+    @GetMapping("/profile/{chatId}")
+    public ResponseEntity<Map<String, Object>> getProfile(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable String chatId,
+            @RequestParam(required = false) Long accountId) {
+        User user = userService.findByEmail(userDetails.getUsername());
+        return ResponseEntity.ok(telegramService.getProfile(user.getId(), chatId, accountId));
     }
 
     @GetMapping("/avatar/{chatId}")

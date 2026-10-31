@@ -18,15 +18,8 @@ import java.time.LocalDateTime;
 import java.util.*;
 
 /**
- * "While you were away" — across every network at once.
- *
- * The counting is the digest. Which chats received something, how much, and whether the
- * last word is still theirs are facts, they cost one query, and they already answer the
- * question. The model is asked only what counting cannot say: what those messages were
- * about — and only for the few chats that got the most.
- *
- * The same cascade as everywhere else, for the same reason: on this hardware a summary per
- * chat would take an hour, and nobody reads fifty summaries anyway.
+ * "While you were away" across all networks. The counts (who wrote, how much, whether the last word
+ * is theirs) cost one query; the model summarises only the few busiest chats.
  */
 @Service
 @RequiredArgsConstructor
@@ -37,11 +30,8 @@ public class DigestService {
     public static final int MAX_TOP_N = 8;
 
     /**
-     * Asked per chat, about that chat's new messages only.
-     *
-     * Deliberately narrow. A model given the whole day across every network writes a
-     * paragraph that is true of nothing in particular; given one chat's twelve new messages
-     * it writes something the user can act on.
+     * Asked per chat about that chat's new messages only, which gives specific summaries rather
+     * than a vague one for the whole day.
      */
     private static final String SYSTEM = """
             Ти стисло переказуєш нові повідомлення з одного чату.
@@ -80,10 +70,8 @@ public class DigestService {
     }
 
     /**
-     * Builds the digest: count everything, then read the top few.
-     *
-     * Not transactional as a whole — the model calls in the middle would hold a connection
-     * for minutes. Each database step is its own short transaction.
+     * Builds the digest: count everything, then summarise the top few. Not transactional as a
+     * whole, because of the model calls in the middle.
      */
     public void execute(Long digestId) {
         Digest digest = begin(digestId);

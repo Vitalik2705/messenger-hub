@@ -13,15 +13,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * Pulls chat history in the background so the local archive grows on its own.
- *
- * Without this, messages are only archived for chats the user happens to open, since
- * that is the only time the frontend asks for them. Fetching a chat's messages archives
- * them as a side effect, so this service only has to decide *which* chats to refresh.
- *
- * Work is deliberately slow: a small batch per tick, oldest-refreshed first, with a pause
- * between chats. Messenger APIs rate-limit aggressively and a Telegram account that trips
- * a limit is far more expensive than a slow archive.
+ * Fetches chat history in the background so the archive also grows for chats the user never opens.
+ * Fetching archives as a side effect, so this only picks which chats to refresh: a small batch per
+ * tick, least recently refreshed first, with pauses, to stay clear of messenger rate limits.
  */
 @Service
 @RequiredArgsConstructor
@@ -104,10 +98,7 @@ public class MessageBackfillService {
         log.info("Backfill pass finished: {}/{} chat(s) refreshed", succeeded, targets.size());
     }
 
-    /**
-     * Fetching messages is what triggers archiving inside each messenger service,
-     * so the return value is intentionally unused.
-     */
+    /** Fetching is what archives, so the result is unused. */
     private void fetchHistory(MessengerType type, String externalChatId, Long userId, Long accountId) {
         switch (type) {
             case TELEGRAM -> telegramService.getChatMessages(

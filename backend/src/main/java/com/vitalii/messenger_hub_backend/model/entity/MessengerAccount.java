@@ -38,8 +38,7 @@ public class MessengerAccount {
     private String username;
 
     /**
-     * For Telegram this holds the Telethon StringSession — full account access,
-     * so it is encrypted at rest.
+     * For Telegram, the Telethon StringSession — full account access — so it is encrypted at rest.
      */
     @Convert(converter = EncryptedStringConverter.class)
     @Column(name = "access_token", columnDefinition = "TEXT")

@@ -10,12 +10,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * How generated replies behave, for one user.
- *
- * Per-chat modes decide *where* the model may write; this decides *how* and *how often*.
- * The limits are not preferences — they are the brakes. A generation loop that answers its
- * own answer is the failure mode that writes fifty messages in somebody's name before it is
- * noticed, and a cooldown is what makes that impossible rather than unlikely.
+ * Per-user limits for generated replies. Per-chat modes decide where the model may write; these
+ * limits (cooldown, daily cap, quiet hours, stop words) are the brakes against a reply loop.
  */
 @Entity
 @Table(name = "auto_reply_settings")
@@ -60,10 +56,7 @@ public class AutoReplySettings {
     @Column(name = "context_messages", nullable = false)
     private Integer contextMessages;
 
-    /**
-     * Hours during which nothing is sent, as 0–23. Drafts are still written: they wait in
-     * the composer, and a suggestion prepared overnight costs the counterpart nothing.
-     */
+    /** Hours (0–23) during which nothing is sent. Drafts are still written. */
     @Column(name = "quiet_from_hour")
     private Integer quietFromHour;
 
@@ -75,20 +68,13 @@ public class AutoReplySettings {
     private Integer maxReplyChars;
 
     /**
-     * Words that stop generation entirely when they appear in the incoming message.
-     *
-     * The setting that matters most in the sending modes: money, passwords, addresses —
-     * subjects where a confident guess in someone's name does real damage. Comma separated.
+     * Comma-separated words that stop generation when they appear in the incoming message: money,
+     * passwords, addresses.
      */
     @Column(name = "stop_words", columnDefinition = "TEXT")
     private String stopWords;
 
-    /**
-     * Incoming messages shorter than this are ignored.
-     *
-     * "ок", "+", a lone emoji — replying to those produces a conversation with nothing in
-     * it, and in the sending modes it produces one the user never sees.
-     */
+    /** Incoming messages shorter than this ("ок", "+", an emoji) are ignored. */
     @Column(name = "min_incoming_chars")
     private Integer minIncomingChars;
 

@@ -1,135 +1,108 @@
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import telegramService from '../services/telegramService';
 import slackService from '../services/slackService';
-import discordService from '../services/discordService';
-import whatsappService from '../services/whatsappService';
-import viberService from '../services/viberService';
-import ChatWindow from './ChatWindow';
-import ChatListItem from './sidebar/ChatListItem';
-import MessageSearchResults from './sidebar/MessageSearchResults';
-import WelcomeScreen from './sidebar/WelcomeScreen';
-import SidebarHeader from './sidebar/SidebarHeader';
-import AccountsDialog from './dialogs/AccountsDialog';
-import NetworkFilter from './sidebar/NetworkFilter';
-import SearchField from './sidebar/SearchField';
-import SectionLabel from './sidebar/SectionLabel';
-import EmptyList from './sidebar/EmptyList';
-import searchService from '../services/searchService';
-import TelegramDialog from './dialogs/TelegramDialog';
-import SlackDialog from './dialogs/SlackDialog';
-import DiscordDialog from './dialogs/DiscordDialog';
-import WhatsAppDialog from './dialogs/WhatsAppDialog';
-import ViberDialog from './dialogs/ViberDialog';
-import AddAccountDialog from './dialogs/AddAccountDialog';
-import ContactsDialog from './dialogs/ContactsDialog';
-import ComposeDialog from './dialogs/ComposeDialog';
-import AnalysisDialog from './dialogs/AnalysisDialog';
+import useMessengers, { NETWORK_TYPES } from '../hooks/useMessengers';
+import useHistorySearch, { MIN_QUERY } from '../hooks/useHistorySearch';
+import ChatWindow from '../components/chat/ChatWindow';
+import ChatListItem from '../components/sidebar/ChatListItem';
+import MessageSearchResults from '../components/sidebar/MessageSearchResults';
+import WelcomeScreen from '../components/sidebar/WelcomeScreen';
+import SidebarHeader from '../components/sidebar/SidebarHeader';
+import AccountsDialog from '../components/dialogs/AccountsDialog';
+import NetworkFilter from '../components/sidebar/NetworkFilter';
+import SearchField from '../components/sidebar/SearchField';
+import SectionLabel from '../components/sidebar/SectionLabel';
+import EmptyList from '../components/sidebar/EmptyList';
+import TelegramDialog from '../components/dialogs/TelegramDialog';
+import TokenConnectDialog from '../components/dialogs/TokenConnectDialog';
+import WhatsAppDialog from '../components/dialogs/WhatsAppDialog';
+import AddAccountDialog from '../components/dialogs/AddAccountDialog';
+import ContactsDialog from '../components/dialogs/ContactsDialog';
+import SystemStatusDialog from '../components/dialogs/SystemStatusDialog';
+import CommandPalette from '../components/dialogs/CommandPalette';
+import { useMediaQuery } from '@mui/material';
+import { useThemeMode } from '../context/ThemeModeContext';
+import { useToast } from '../context/ToastContext';
+import { usePresentation } from '../context/PresentationContext';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import AddIcon from '@mui/icons-material/Add';
+import MonitorHeartOutlinedIcon from '@mui/icons-material/MonitorHeartOutlined';
+import InsightsIcon from '@mui/icons-material/Insights';
+import PeopleAltOutlinedIcon from '@mui/icons-material/PeopleAltOutlined';
+import SyncIcon from '@mui/icons-material/Sync';
+import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
+import LogoutIcon from '@mui/icons-material/Logout';
+import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
+import ComposeDialog from '../components/dialogs/ComposeDialog';
+import AnalysisDialog from '../components/dialogs/AnalysisDialog';
 import contactService from '../services/contactService';
 import notificationService from '../services/notificationService';
 import { Box, List } from '@mui/material';
 import { MESSENGER_LABELS } from '../theme/tokens';
 import { accountScope, matchesScope, networkOf } from '../utils/scope';
+import { t } from '../i18n';
 
 const DashboardPage = () => {
     const { logout } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
 
-    // Multi-account: arrays of MessengerAccountDTO
-    const [telegramAccounts, setTelegramAccounts] = useState([]);
-    const [slackAccounts, setSlackAccounts] = useState([]);
-    const [discordAccounts, setDiscordAccounts] = useState([]);
-    const [whatsappAccounts, setWhatsappAccounts] = useState([]);
-    const [viberAccounts, setViberAccounts] = useState([]);
+    const { accounts, chats, everyChat, connectedTypes, setChatsOf, loadChats, refreshAccounts, disconnect } = useMessengers();
 
-    const [telegramChats, setTelegramChats] = useState([]);
-    const [slackChats, setSlackChats] = useState([]);
-    const [discordChats, setDiscordChats] = useState([]);
-    const [whatsappChats, setWhatsappChats] = useState([]);
-    const [viberChats, setViberChats] = useState([]);
 
     const [selectedChat, setSelectedChat] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
-    const [filter, setFilter] = useState('ALL');
+    const [chosenFilter, setFilter] = useState('ALL');
+    /**
+     * The scope in force: the chosen one while it exists, otherwise 'ALL' — e.g. after its account
+     * is disconnected or a network drops back to one account.
+     */
+    const scopeKeys = new Set(['ALL', ...connectedTypes.flatMap(type => [
+        // The network is always selectable; its accounts are offered as well once there is
+        // more than one to tell apart.
+        type,
+        ...(accounts[type].length > 1 ? accounts[type].map(a => accountScope(type, a.id)) : []),
+    ])]);
+    const filter = scopeKeys.has(chosenFilter) ? chosenFilter : 'ALL';
     /** Hides bots, channels and service accounts — an axis independent of the network scope. */
     const [peopleOnly, setPeopleOnly] = useState(false);
     const [syncing, setSyncing] = useState(false);
 
-    // History search — separate from the chat-name filter above it, which is purely local
-    const [messageHits, setMessageHits] = useState([]);
-    const [messageHitsTotal, setMessageHitsTotal] = useState(0);
-    const [searchLoading, setSearchLoading] = useState(false);
-    const [searchError, setSearchError] = useState('');
     /**
-     * Which kind of history search is running.
-     *
-     * Not a filter on one search but a choice between two: full-text finds the words you
-     * typed, semantic finds what you meant. They rank by different things and neither is a
-     * superset of the other, so the user picks.
+     * History search mode: 'text' (words), 'semantic' (meaning) or 'hybrid' (both, merged on the
+     * server).
      */
-    const [searchMode, setSearchMode] = useState('text');
+    const [searchMode, setSearchMode] = useState('hybrid');
 
     const [openContactsDialog, setOpenContactsDialog] = useState(false);
+    const [openSystemStatus, setOpenSystemStatus] = useState(false);
+    const [openPalette, setOpenPalette] = useState(false);
+    /** Chat list tab by what is on the other side: all, people, groups, channels, bots. */
+    const [kindTab, setKindTab] = useState('ALL');
+    const narrow = useMediaQuery('(max-width: 760px)');
+    const { mode, setMode } = useThemeMode();
+    const { presenting, setPresenting } = usePresentation();
+    const toast = useToast();
 
-    // Telegram dialog
-    const [openTelegramDialog, setOpenTelegramDialog] = useState(false);
-    const [tgStep, setTgStep] = useState(0);
-    const [tgPhone, setTgPhone] = useState('');
-    const [tgCode, setTgCode] = useState('');
-    const [tgPassword, setTgPassword] = useState('');
-    const [tgPhoneCodeHash, setTgPhoneCodeHash] = useState('');
-    const [tgSession, setTgSession] = useState('');
-    const [tgError, setTgError] = useState('');
-    const [tgLoading, setTgLoading] = useState(false);
-
-    // Slack dialog
-    const [openSlackDialog, setOpenSlackDialog] = useState(false);
-    const [slackToken, setSlackToken] = useState('');
-    const [slackError, setSlackError] = useState('');
-    const [slackLoading, setSlackLoading] = useState(false);
-
-    // Discord dialog
-    const [openDiscordDialog, setOpenDiscordDialog] = useState(false);
-    const [discordToken, setDiscordToken] = useState('');
-    const [discordError, setDiscordError] = useState('');
-    const [discordLoading, setDiscordLoading] = useState(false);
-
-    // WhatsApp dialog
-    const [openWhatsAppDialog, setOpenWhatsAppDialog] = useState(false);
-
-    // Viber dialog
-    const [openViberDialog, setOpenViberDialog] = useState(false);
-    const [viberToken, setViberToken] = useState('');
-    const [viberError, setViberError] = useState('');
-    const [viberLoading, setViberLoading] = useState(false);
+    /** The network whose connect dialog is open, if any. */
+    const [connectDialog, setConnectDialog] = useState(null);
 
     // Add account picker
     const [openAddAccountDialog, setOpenAddAccountDialog] = useState(false);
-    const [openAccountsDialog, setOpenAccountsDialog] = useState(false);
+    // Settings → "Керувати підключеннями" lands here with the accounts dialog already open.
+    const [openAccountsDialog, setOpenAccountsDialog] = useState(Boolean(location.state?.openAccounts));
     const [openComposeDialog, setOpenComposeDialog] = useState(false);
     const [openAnalysisDialog, setOpenAnalysisDialog] = useState(false);
 
     /**
-     * Confirmed people, held here rather than only inside the contacts dialog.
-     *
-     * A link the user has confirmed is worth nothing while its only evidence is a list in a
-     * dialog they have to remember to open. Kept at this level, it can put the person's
-     * other networks on the chat they are actually reading.
+     * Contacts linked across networks, kept here so the open chat can show the person's other
+     * chats.
      */
     const [contacts, setContacts] = useState([]);
 
-    const chatPollingRef = useRef(null);
-    /** Guards against a second poll starting while the previous one is still in flight. */
-    const pollInFlightRef = useRef(false);
-
-    const telegramConnected = telegramAccounts.length > 0;
-    const slackConnected = slackAccounts.length > 0;
-    const discordConnected = discordAccounts.length > 0;
-    const whatsappConnected = whatsappAccounts.length > 0;
-    const viberConnected = viberAccounts.length > 0;
-
-    useEffect(() => { checkStatus(); }, []);
     useEffect(() => { notificationService.requestPermission(); }, []);
     useEffect(() => { loadContacts(); }, []);
 
@@ -140,338 +113,52 @@ const DashboardPage = () => {
             setContacts(response.data);
         } catch { /* the chat still opens without its cross-network links */ }
     };
-    useEffect(() => {
-        if (telegramConnected || slackConnected || discordConnected || whatsappConnected || viberConnected) startChatPolling();
-        else stopChatPolling();
-        return () => stopChatPolling();
-    }, [telegramConnected, slackConnected, discordConnected, whatsappConnected, viberConnected]);
-
-    /**
-     * Ctrl/Cmd+K opens "write to".
-     *
-     * The chat-list field already owns `/`, and this is a different question — that one
-     * searches what was said, this one finds who to say it to.
-     */
+    /** Ctrl/Cmd+K opens the command palette; `/` stays with the chat-list search field. */
     useEffect(() => {
         const onKey = (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
                 e.preventDefault();
-                setOpenComposeDialog(true);
+                setOpenPalette(true);
             }
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
     }, []);
 
-    // Polling pauses on a hidden tab, so coming back needs one immediate pass rather than
-    // up to a full interval of showing a stale list.
-    useEffect(() => {
-        const onVisible = () => { if (!document.hidden) pollChats(); };
-        document.addEventListener('visibilitychange', onVisible);
-        return () => document.removeEventListener('visibilitychange', onVisible);
-    });
-
-    /**
-     * Refreshes the chat list in the background.
-     *
-     * Every pass costs one dialog-list fetch per connected account, straight through to the
-     * messenger. At five seconds and four Telegram accounts that was around fifty round
-     * trips a minute, sharing one Telethon connection with the fetches the user is actually
-     * waiting on — which is most of why opening a chat felt slow.
-     */
-    const CHAT_POLL_INTERVAL = 25000;
-
-    const startChatPolling = () => { stopChatPolling(); chatPollingRef.current = setInterval(pollChats, CHAT_POLL_INTERVAL); };
-    const stopChatPolling = () => { if (chatPollingRef.current) { clearInterval(chatPollingRef.current); chatPollingRef.current = null; } };
-
-    const pollChats = async () => {
-        // A slow messenger used to let passes pile up on top of each other: the interval
-        // fired regardless of whether the previous one had come back.
-        if (pollInFlightRef.current) return;
-        // A tab nobody is looking at has no list to keep fresh, and its requests queue
-        // ahead of the ones from the window in front of the user.
-        if (typeof document !== 'undefined' && document.hidden) return;
-        pollInFlightRef.current = true;
-        try {
-            if (telegramConnected) {
-                const chats = await telegramService.getChats();
-                setTelegramChats(prev => {
-                    const avatarMap = new Map(prev.map(c => [c.externalChatId, c.avatarBase64]));
-                    const pinMap = new Map(prev.map(c => [c.externalChatId, c.isPinned]));
-                    const unreadMap = new Map(prev.map(c => [c.externalChatId, c.unreadCount || 0]));
-                    chats.forEach(chat => {
-                        const prevUnread = unreadMap.get(chat.externalChatId) || 0;
-                        const newUnread = chat.unreadCount || 0;
-                        if (newUnread > prevUnread) notificationService.showMessage(chat.name, chat.lastMessage, 'TELEGRAM');
-                    });
-                    return chats.map(c => ({
-                        ...c,
-                        avatarBase64: avatarMap.get(c.externalChatId) || c.avatarBase64,
-                        isPinned: pinMap.get(c.externalChatId) ?? c.isPinned,
-                    }));
-                });
-            }
-            if (slackConnected) {
-                const chats = await slackService.getChats();
-                setSlackChats(prev => {
-                    const unreadMap = new Map(prev.map(c => [c.externalChatId, c.unreadCount || 0]));
-                    chats.forEach(chat => {
-                        const prevUnread = unreadMap.get(chat.externalChatId) || 0;
-                        const newUnread = chat.unreadCount || 0;
-                        if (newUnread > prevUnread) notificationService.showMessage(chat.name, chat.lastMessage, 'SLACK');
-                    });
-                    return chats;
-                });
-            }
-            if (discordConnected) {
-                const chats = await discordService.getChats();
-                setDiscordChats(chats);
-            }
-            if (whatsappConnected) {
-                const chats = await whatsappService.getChats();
-                setWhatsappChats(chats);
-            }
-            if (viberConnected) {
-                const chats = await viberService.getChats();
-                setViberChats(chats);
-            }
-        } catch {} finally { pollInFlightRef.current = false; }
+    /** The connect dialog finished: show the new account and its chats. */
+    const handleConnected = (type) => {
+        setConnectDialog(null);
+        refreshAccounts(type);
     };
 
-    const checkStatus = async () => {
+    const handleDisconnect = async (type, accountId) => {
         try {
-            const tgAccounts = await telegramService.getAccounts();
-            setTelegramAccounts(tgAccounts);
-            if (tgAccounts.length > 0) loadTelegramChats();
-        } catch {}
-        try {
-            const slAccounts = await slackService.getAccounts();
-            setSlackAccounts(slAccounts);
-            if (slAccounts.length > 0) loadSlackChats();
-        } catch {}
-        try {
-            const dcAccounts = await discordService.getAccounts();
-            setDiscordAccounts(dcAccounts);
-            if (dcAccounts.length > 0) loadDiscordChats();
-        } catch {}
-        try {
-            const waAccounts = await whatsappService.getAccounts();
-            setWhatsappAccounts(waAccounts);
-            if (waAccounts.length > 0) loadWhatsAppChats();
-        } catch {}
-        try {
-            const vbAccounts = await viberService.getAccounts();
-            setViberAccounts(vbAccounts);
-            if (vbAccounts.length > 0) loadViberChats();
-        } catch {}
-    };
-
-    const loadTelegramChats = async () => {
-        try {
-            const chats = await telegramService.getChats();
-            setTelegramChats(chats);
-            chats.forEach(chat => {
-                if (chat.avatarBase64) return;
-                telegramService.getAvatar(chat.externalChatId)
-                    .then(r => { if (r?.avatar_base64) setTelegramChats(prev => prev.map(c => c.externalChatId === chat.externalChatId ? { ...c, avatarBase64: r.avatar_base64 } : c)); })
-                    .catch(() => {});
-            });
-        } catch {}
-    };
-
-    const loadSlackChats = async () => { try { setSlackChats(await slackService.getChats()); } catch {} };
-    const loadDiscordChats = async () => { try { setDiscordChats(await discordService.getChats()); } catch {} };
-    const loadWhatsAppChats = async () => { try { setWhatsappChats(await whatsappService.getChats()); } catch {} };
-    const loadViberChats = async () => { try { setViberChats(await viberService.getChats()); } catch {} };
-
-    const handleSendCode = async () => {
-        setTgError(''); setTgLoading(true);
-        try { const r = await telegramService.sendCode(tgPhone); setTgPhoneCodeHash(r.phone_code_hash); setTgSession(r.session); setTgStep(1); }
-        catch (e) { setTgError(e.response?.data?.detail || 'Failed to send code'); }
-        finally { setTgLoading(false); }
-    };
-    const handleSignIn = async () => {
-        setTgError(''); setTgLoading(true);
-        try {
-            const r = await telegramService.signIn({ phone: tgPhone, code: tgCode, phone_code_hash: tgPhoneCodeHash, session: tgSession });
-            if (r.requires_password) { setTgSession(r.session); setTgStep(2); }
-            else { const accounts = await telegramService.getAccounts(); setTelegramAccounts(accounts); setOpenTelegramDialog(false); loadTelegramChats(); }
+            const left = await disconnect(type, accountId);
+            if (left && left.length === 0) setSelectedChat(p => (p?.messengerType === type ? null : p));
+        } catch {
+            toast(t('Не вдалося відключити акаунт'), 'error');
         }
-        catch (e) { setTgError(e.response?.data?.detail || 'Invalid code'); }
-        finally { setTgLoading(false); }
-    };
-    const handleSignInPassword = async () => {
-        setTgError(''); setTgLoading(true);
-        try {
-            await telegramService.signInPassword({ phone: tgPhone, password: tgPassword, session: tgSession });
-            const accounts = await telegramService.getAccounts();
-            setTelegramAccounts(accounts); setOpenTelegramDialog(false); loadTelegramChats();
-        }
-        catch (e) { setTgError(e.response?.data?.detail || 'Invalid password'); }
-        finally { setTgLoading(false); }
-    };
-    const handleDisconnectTelegram = async (accountId) => {
-        try {
-            await telegramService.disconnect(accountId);
-            const accounts = await telegramService.getAccounts();
-            setTelegramAccounts(accounts);
-            if (accounts.length === 0) { setTelegramChats([]); setSelectedChat(p => p?.messengerType === 'TELEGRAM' ? null : p); }
-            else loadTelegramChats();
-        } catch {}
-    };
-    const handleConnectSlack = async () => {
-        setSlackError(''); setSlackLoading(true);
-        try {
-            await slackService.connect(slackToken);
-            const accounts = await slackService.getAccounts();
-            setSlackAccounts(accounts); setOpenSlackDialog(false); loadSlackChats();
-        }
-        catch (e) { setSlackError(e.response?.data?.detail || 'Failed to connect'); }
-        finally { setSlackLoading(false); }
-    };
-    const handleDisconnectSlack = async (accountId) => {
-        try {
-            await slackService.disconnect(accountId);
-            const accounts = await slackService.getAccounts();
-            setSlackAccounts(accounts);
-            if (accounts.length === 0) { setSlackChats([]); setSelectedChat(p => p?.messengerType === 'SLACK' ? null : p); }
-            else loadSlackChats();
-        } catch {}
-    };
-    const handleConnectDiscord = async () => {
-        setDiscordError(''); setDiscordLoading(true);
-        try {
-            await discordService.connect(discordToken);
-            const accounts = await discordService.getAccounts();
-            setDiscordAccounts(accounts); setOpenDiscordDialog(false); loadDiscordChats();
-        }
-        catch (e) { setDiscordError(e.response?.data?.detail || e.response?.data?.error || 'Failed to connect'); }
-        finally { setDiscordLoading(false); }
-    };
-    const handleDisconnectDiscord = async (accountId) => {
-        try {
-            await discordService.disconnect(accountId);
-            const accounts = await discordService.getAccounts();
-            setDiscordAccounts(accounts);
-            if (accounts.length === 0) { setDiscordChats([]); setSelectedChat(p => p?.messengerType === 'DISCORD' ? null : p); }
-            else loadDiscordChats();
-        } catch {}
-    };
-    const handleWhatsAppConnected = async () => {
-        setOpenWhatsAppDialog(false);
-        try {
-            const accounts = await whatsappService.getAccounts();
-            setWhatsappAccounts(accounts);
-            if (accounts.length > 0) loadWhatsAppChats();
-        } catch {}
-    };
-    const handleDisconnectWhatsApp = async (accountId) => {
-        try {
-            await whatsappService.disconnect(accountId);
-            const accounts = await whatsappService.getAccounts();
-            setWhatsappAccounts(accounts);
-            if (accounts.length === 0) { setWhatsappChats([]); setSelectedChat(p => p?.messengerType === 'WHATSAPP' ? null : p); }
-            else loadWhatsAppChats();
-        } catch {}
-    };
-    const handleConnectViber = async () => {
-        setViberError(''); setViberLoading(true);
-        try {
-            await viberService.connect(viberToken);
-            const accounts = await viberService.getAccounts();
-            setViberAccounts(accounts); setOpenViberDialog(false); loadViberChats();
-        }
-        catch (e) { setViberError(e.response?.data?.detail || 'Failed to connect'); }
-        finally { setViberLoading(false); }
-    };
-    const handleDisconnectViber = async (accountId) => {
-        try {
-            await viberService.disconnect(accountId);
-            const accounts = await viberService.getAccounts();
-            setViberAccounts(accounts);
-            if (accounts.length === 0) { setViberChats([]); setSelectedChat(p => p?.messengerType === 'VIBER' ? null : p); }
-            else loadViberChats();
-        } catch {}
-    };
-
-    const handleMessengerSelect = (key) => {
-        if (key === 'TELEGRAM') { setTgStep(0); setTgPhone(''); setTgCode(''); setTgPassword(''); setTgError(''); setOpenTelegramDialog(true); }
-        else if (key === 'SLACK') { setSlackError(''); setSlackToken(''); setOpenSlackDialog(true); }
-        else if (key === 'DISCORD') { setDiscordError(''); setDiscordToken(''); setOpenDiscordDialog(true); }
-        else if (key === 'WHATSAPP') { setOpenWhatsAppDialog(true); }
-        else if (key === 'VIBER') { setViberError(''); setViberToken(''); setOpenViberDialog(true); }
     };
 
     const handleSelectChat = (chat) => {
         setSelectedChat(chat);
         if (chat.messengerType === 'TELEGRAM' && chat.unreadCount > 0) {
-            telegramService.markAsRead(chat.externalChatId).catch(() => {});
-            setTelegramChats(p => p.map(c => c.id === chat.id ? { ...c, unreadCount: 0 } : c));
+            telegramService.markAsRead(chat.externalChatId).catch(() => { /* the next poll corrects the count */ });
+            setChatsOf('TELEGRAM', p => p.map(c => c.id === chat.id ? { ...c, unreadCount: 0 } : c));
         }
     };
 
-    /**
-     * Search the archive as the user types.
-     *
-     * Debounced, because every keystroke would otherwise be a round-trip; aborted on the
-     * next keystroke, so a slow response for "зус" cannot land after the one for "зустріч"
-     * and overwrite it.
-     */
-    useEffect(() => {
-        const query = searchQuery.trim();
-        if (query.length < 2) {
-            setMessageHits([]);
-            setMessageHitsTotal(0);
-            setSearchError('');
-            setSearchLoading(false);
-            return;
-        }
-
-        const controller = new AbortController();
-        setSearchLoading(true);
-
-        const timer = setTimeout(async () => {
-            try {
-                if (searchMode === 'semantic') {
-                    const res = await searchService.searchSemantic(query, {
-                        limit: 15, signal: controller.signal,
-                    });
-                    setMessageHits(res.data.results || []);
-                    setMessageHitsTotal((res.data.results || []).length);
-                    // The server reports a missing model as a result, not a failure — the
-                    // word search beside it still works.
-                    setSearchError(res.data.error || '');
-                    return;
-                }
-                const res = await searchService.searchMessages(query, {
-                    // History search narrows by network, which is as fine-grained as the
-                    // endpoint goes; an account scope still restricts to its own network.
-                    messenger: networkOf(filter),
-                    limit: 15,
-                    signal: controller.signal,
-                });
-                setMessageHits(res.data.results);
-                setMessageHitsTotal(res.data.total);
-                setSearchError('');
-            } catch (err) {
-                if (controller.signal.aborted) return;
-                setMessageHits([]);
-                setMessageHitsTotal(0);
-                setSearchError('Не вдалося виконати пошук');
-            } finally {
-                if (!controller.signal.aborted) setSearchLoading(false);
-            }
-        }, 300);
-
-        return () => { clearTimeout(timer); controller.abort(); };
-    }, [searchQuery, filter, searchMode]);
+    const search = useHistorySearch(searchQuery, searchMode, networkOf(filter));
 
     const handleSync = async () => {
         setSyncing(true);
         try {
-            if (telegramConnected) { await telegramService.sync(); loadTelegramChats(); }
-            if (slackConnected) { await slackService.sync(); loadSlackChats(); }
-        } catch {} finally { setSyncing(false); }
+            if (accounts.TELEGRAM.length) { await telegramService.sync(); loadChats('TELEGRAM'); }
+            if (accounts.SLACK.length) { await slackService.sync(); loadChats('SLACK'); }
+            toast(t('Чати синхронізовано'), 'success');
+        } catch {
+            toast(t('Синхронізація не вдалася'), 'error');
+        } finally { setSyncing(false); }
     };
 
     const handleTogglePin = async (chat) => {
@@ -479,18 +166,15 @@ const DashboardPage = () => {
         try {
             const res = await telegramService.togglePin(chat.externalChatId);
             const isPinned = res.data.isPinned;
-            setTelegramChats(prev => prev.map(c => c.id === chat.id ? { ...c, isPinned } : c));
-        } catch (err) { console.error(err); }
+            setChatsOf('TELEGRAM', prev => prev.map(c => c.id === chat.id ? { ...c, isPinned } : c));
+        } catch {
+            toast(t('Не вдалося закріпити чат'), 'error');
+        }
     };
 
-    const everyChat = [...telegramChats, ...slackChats, ...discordChats, ...whatsappChats, ...viberChats];
-
     /**
-     * Keeps only chats with a human on the other side.
-     *
-     * `chatKind` is what the messenger itself reports — Telegram's bot/broadcast flags,
-     * Slack's is_bot — not a guess. A chat synced before the field existed has no kind and
-     * is kept: hiding a real person would be the worse error, and the next sync fills it in.
+     * Chats with a person on the other side. `chatKind` comes from the messenger; chats synced
+     * before it existed have none and are kept.
      */
     const isPerson = (chat) => chat.chatKind == null || chat.chatKind === 'PERSON';
 
@@ -501,8 +185,11 @@ const DashboardPage = () => {
     // What the people-only filter is costing right now, shown next to the toggle.
     const hiddenByPeopleOnly = inScope.length - inScope.filter(isPerson).length;
 
+    // A tab other than "all" says exactly what to show, so the people-only switch steps aside.
+    const KIND_OF = (c) => (c.chatKind == null ? 'PERSON' : c.chatKind);
+    const kindCounts = inScope.reduce((acc, c) => { acc[KIND_OF(c)] = (acc[KIND_OF(c)] || 0) + 1; return acc; }, {});
     const allChats = inScope
-        .filter(c => !peopleOnly || isPerson(c))
+        .filter(c => (kindTab === 'ALL' ? (!peopleOnly || isPerson(c)) : KIND_OF(c) === kindTab))
         .sort((a, b) => {
             if (a.isPinned && !b.isPinned) return -1;
             if (!a.isPinned && b.isPinned) return 1;
@@ -510,10 +197,8 @@ const DashboardPage = () => {
         });
 
     /**
-     * A hit's chat is looked up in the unfiltered list: the sidebar above may have filtered
-     * it out by name, but the message itself matched and must still be reachable.
+     * Opens a chat by database id, looked up in the unfiltered list so search hits stay reachable.
      */
-    /** Opens a chat by its database id, whichever list the id arrived from. */
     const openChatById = (chatId) => {
         const chat = everyChat.find(c => c.id === chatId);
         if (chat) handleSelectChat(chat);
@@ -521,23 +206,43 @@ const DashboardPage = () => {
 
     const handleOpenSearchHit = (hit) => openChatById(hit.chatId);
 
+    /** "Find similar" from a message: a meaning search over every network, in the sidebar. */
+    const handleFindSimilar = (text) => {
+        setSearchMode('semantic');
+        setSearchQuery(text.slice(0, 200));
+        if (narrow) setSelectedChat(null);
+        toast(t('Шукаю схожі за змістом у всіх чатах'), 'info');
+    };
+
+    /** The size of the inbox in the current scope — not of the name search, which may be empty. */
+    const scopeTotal = everyChat.filter(c => matchesScope(c, filter)).length;
+
+    const paletteActions = [
+        { label: t('Написати повідомлення…'), icon: <EditOutlinedIcon fontSize="small" />, run: () => setOpenComposeDialog(true), keywords: ['compose', t('нове')] },
+        { label: t('Підключити месенджер'), icon: <AddIcon fontSize="small" />, run: () => setOpenAddAccountDialog(true), keywords: [t('акаунт'), 'telegram', 'slack', 'whatsapp'] },
+        { label: t('Стан системи'), icon: <MonitorHeartOutlinedIcon fontSize="small" />, run: () => setOpenSystemStatus(true), keywords: [t('статус'), t('сервіси'), 'ollama'] },
+        { label: t('Аналітика чатів'), icon: <InsightsIcon fontSize="small" />, run: () => navigate('/analytics'), keywords: [t('аналіз'), t('дайджест')] },
+        { label: t('Контакти між мережами'), icon: <PeopleAltOutlinedIcon fontSize="small" />, run: () => setOpenContactsDialog(true) },
+        { label: t('Синхронізувати чати'), icon: <SyncIcon fontSize="small" />, run: handleSync, keywords: [t('оновити')] },
+        { label: mode === 'dark' ? t('Світла тема') : t('Темна тема'), icon: <DarkModeOutlinedIcon fontSize="small" />, run: () => setMode(mode === 'dark' ? 'light' : 'dark'), keywords: [t('тема'), 'dark', 'light', t('темна'), t('світла')] },
+        { label: presenting ? t('Вимкнути режим презентації') : t('Режим презентації'), icon: <VisibilityOffOutlinedIcon fontSize="small" />, run: () => setPresenting(!presenting), keywords: [t('захист'), t('приховати'), t('проектор'), 'presentation', 'ctrl+shift+h'] },
+        { label: t('Налаштування'), icon: <SettingsOutlinedIcon fontSize="small" />, run: () => navigate('/settings'), keywords: [t('профіль'), t('пароль'), 'settings', t('акаунт')] },
+        { label: t('Вийти'), icon: <LogoutIcon fontSize="small" />, run: logout, keywords: ['logout'] },
+    ];
+
+    const KIND_TABS = [['ALL', t('Усі')], ['PERSON', t('Особисті')], ['GROUP', t('Групи')], ['CHANNEL', t('Канали')], ['BOT', t('Боти')]];
+
     /**
-     * The person behind the open chat, and their other chats.
-     *
-     * Identities whose chat is not in the list are dropped rather than shown as dead ends —
-     * that happens whenever the account they belong to is disconnected.
+     * The contact behind the open chat. Identities whose chat is not loaded (disconnected account)
+     * are dropped.
      */
     const openChatContact = selectedChat
         ? contacts.find(c => c.identities.some(i => i.chatId === selectedChat.id))
         : null;
 
     /**
-     * Who the user can write to, as people rather than as chats.
-     *
-     * Chats linked to one contact collapse into a single entry holding every route to that
-     * person; everything else stands for itself. Channels and service accounts are dropped —
-     * they are not addressable, and offering them would put the news feeds the user actually
-     * has most of at the top of a list meant for writing.
+     * Compose targets as people: chats linked to one contact collapse into one entry; channels and
+     * service accounts are left out.
      */
     const composeTargets = (() => {
         const contactOfChat = new Map();
@@ -569,18 +274,10 @@ const DashboardPage = () => {
         && everyChat.some(c => c.id === identity.chatId));
 
     /** Matches the minimum the search effect will actually send to the server. */
-    const isSearchingHistory = searchQuery.trim().length >= 2;
+    const isSearchingHistory = searchQuery.trim().length >= MIN_QUERY;
 
-    /**
-     * Whether a row has to name its network.
-     *
-     * With one messenger connected the mark would repeat on every row and carry no
-     * information; from the second one on, it is the only thing that answers which network a
-     * chat came from — the colour rail distinguishes them but does not name them.
-     */
-    const hasMultipleNetworks = [
-        telegramAccounts, slackAccounts, discordAccounts, whatsappAccounts, viberAccounts,
-    ].filter(accounts => accounts.length > 0).length > 1;
+    /** The network mark on each row is only needed once more than one network is connected. */
+    const hasMultipleNetworks = connectedTypes.length > 1;
 
     const chatListItems = allChats.map(chat => (
         <ChatListItem
@@ -596,17 +293,14 @@ const DashboardPage = () => {
     const totalUnread = allChats.reduce((s, c) => s + (c.unreadCount || 0), 0);
 
     /**
-     * The five networks, described once instead of being spelled out in every list, filter
-     * row and account chip. Adding a sixth messenger is now one entry rather than a hunt
-     * through the file.
+     * The five networks in one list, so every filter, counter and account chip is derived from it.
      */
-    const NETWORKS = [
-        { type: 'TELEGRAM', accounts: telegramAccounts, chats: telegramChats, onDisconnect: handleDisconnectTelegram },
-        { type: 'SLACK', accounts: slackAccounts, chats: slackChats, onDisconnect: handleDisconnectSlack },
-        { type: 'DISCORD', accounts: discordAccounts, chats: discordChats, onDisconnect: handleDisconnectDiscord },
-        { type: 'WHATSAPP', accounts: whatsappAccounts, chats: whatsappChats, onDisconnect: handleDisconnectWhatsApp },
-        { type: 'VIBER', accounts: viberAccounts, chats: viberChats, onDisconnect: handleDisconnectViber },
-    ];
+    const NETWORKS = NETWORK_TYPES.map(type => ({
+        type,
+        accounts: accounts[type],
+        chats: chats[type],
+        onDisconnect: (accountId) => handleDisconnect(type, accountId),
+    }));
 
     /** What each account actually contributes — the accounts dialog reports it, the filter reads the unread half. */
     const tallyByAccount = everyChat.reduce((totals, chat) => {
@@ -649,11 +343,8 @@ const DashboardPage = () => {
         ]));
 
     /**
-     * Account names, but only where naming the account tells you something.
-     *
-     * A person reachable from two Telegram accounts appears twice under one contact, with
-     * the same name both times; the account is the only thing that separates the rows. On a
-     * network with a single account it would just repeat on every row.
+     * Account names for networks with more than one account, where they are what tells two rows
+     * apart.
      */
     const accountLabelById = Object.fromEntries(
         NETWORKS.filter(network => network.accounts.length > 1)
@@ -665,50 +356,32 @@ const DashboardPage = () => {
     const unreadByAccount = Object.fromEntries(
         Object.entries(tallyByAccount).map(([id, tally]) => [id, tally.unread]));
 
-    /**
-     * Falls back to 'Усі' when the scope stops existing.
-     *
-     * Disconnecting the account or network being filtered on otherwise leaves an empty list
-     * with no chip highlighted, which reads as "you have no chats" rather than "that filter
-     * no longer applies". Also covers a network dropping back to one account, where the
-     * per-account chips collapse into a single network chip.
-     */
-    const scopeKeys = new Set([
-        'ALL',
-        ...NETWORKS.filter(n => n.accounts.length > 0).flatMap(n => [
-            // The network is always selectable; its accounts are offered as well once
-            // there is more than one to tell apart.
-            n.type,
-            ...(n.accounts.length > 1 ? n.accounts.map(a => accountScope(n.type, a.id)) : []),
-        ]),
-    ]);
-    useEffect(() => {
-        if (!scopeKeys.has(filter)) setFilter('ALL');
-    }, [filter, [...scopeKeys].join('|')]);
 
     return (
         <Box sx={(t) => ({ display: 'flex', height: '100vh', bgcolor: t.c.bg, overflow: 'hidden' })}>
 
-            {/* Бічна панель */}
+            {/* Sidebar. On a phone-width screen the list and the chat take turns. */}
             <Box
                 component="aside"
                 sx={(t) => ({
-                    width: 330, flexShrink: 0,
-                    display: 'flex', flexDirection: 'column',
+                    width: narrow ? '100%' : 330, flexShrink: 0,
+                    display: narrow && selectedChat ? 'none' : 'flex', flexDirection: 'column',
                     bgcolor: t.c.surfaceAlt,
                     borderRight: `1px solid ${t.c.border}`,
                 })}
             >
                 <SidebarHeader
-                    chatCount={allChats.length}
+                    chatCount={scopeTotal}
                     totalUnread={totalUnread}
                     syncing={syncing}
                     accounts={connectedAccounts}
                     onSync={handleSync}
                     onContacts={() => setOpenContactsDialog(true)}
+                    onSystemStatus={() => setOpenSystemStatus(true)}
                     onAccounts={() => setOpenAccountsDialog(true)}
                     onCompose={() => setOpenComposeDialog(true)}
                     onAnalytics={() => navigate('/analytics')}
+                    onSettings={() => navigate('/settings')}
                     onLogout={logout}
                 />
 
@@ -729,10 +402,37 @@ const DashboardPage = () => {
                     totalUnread={totalUnread}
                 />
 
-                {/* `flex: 1 1 0`, not `flexGrow: 1`. With a basis of `auto` the list asks for
-                    the full height of every chat it holds, the column overflows, and flex
-                    recovers the difference by shrinking its siblings — which is what was
-                    slicing the bottom off the filter chips. */}
+                {!isSearchingHistory && scopeTotal > 0 && (
+                    <Box
+                        onWheel={(e) => { if (e.deltaY) e.currentTarget.scrollLeft += e.deltaY; }}
+                        sx={{
+                            display: 'flex', gap: 0.5, px: 2, pb: 1, overflowX: 'auto', flexShrink: 0,
+                            scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' },
+                            // The fade shows the row continues past the edge.
+                            maskImage: 'linear-gradient(to right, #000 85%, transparent)',
+                        }}>
+                        {KIND_TABS.filter(([key]) => key === 'ALL' || kindCounts[key]).map(([key, label]) => (
+                            <Box key={key} role="button" tabIndex={0}
+                                 onClick={() => setKindTab(key)}
+                                 onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setKindTab(key)}
+                                 sx={(t) => ({
+                                     display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0,
+                                     px: 1.1, py: 0.4, borderRadius: '999px', cursor: 'pointer',
+                                     fontSize: 12, fontWeight: kindTab === key ? 700 : 550,
+                                     color: kindTab === key ? t.c.onAccent : t.c.textMuted,
+                                     bgcolor: kindTab === key ? t.c.accent : t.c.surfaceSunken,
+                                     transition: 'background-color .12s',
+                                     '&:hover': kindTab === key ? {} : { bgcolor: t.c.surfaceActive },
+                                 })}>
+                                {label}
+                                {key !== 'ALL' && <Box component="span" sx={{ opacity: 0.7, fontWeight: 600 }}>{kindCounts[key]}</Box>}
+                            </Box>
+                        ))}
+                    </Box>
+                )}
+
+                {/* `flex: 1 1 0` rather than `flexGrow: 1`: with an auto basis the list would claim
+                   its full height and squeeze the filters above it. */}
                 <Box sx={{ flex: '1 1 0', minHeight: 0, overflowY: 'auto', pb: 1 }}>
                     {isSearchingHistory ? (
                         <>
@@ -741,15 +441,15 @@ const DashboardPage = () => {
                                 as one ranking. */}
                             {allChats.length > 0 && (
                                 <>
-                                    <SectionLabel>Чати</SectionLabel>
+                                    <SectionLabel>{t('Чати')}</SectionLabel>
                                     <List sx={{ p: 0 }}>{chatListItems}</List>
                                 </>
                             )}
                             <MessageSearchResults
-                                results={messageHits}
-                                total={messageHitsTotal}
-                                loading={searchLoading}
-                                error={searchError}
+                                results={search.results}
+                                total={search.total}
+                                loading={search.loading}
+                                error={search.error}
                                 onSelect={handleOpenSearchHit}
                                 mode={searchMode}
                                 onModeChange={setSearchMode}
@@ -769,7 +469,7 @@ const DashboardPage = () => {
             </Box>
 
 
-            {/* Основна область */}
+            {/* Main area */}
             {selectedChat
                 ? <ChatWindow
                     chat={selectedChat}
@@ -779,8 +479,9 @@ const DashboardPage = () => {
                     accountLabels={accountLabelById}
                     onOpenLinked={openChatById}
                     onAnalyse={() => setOpenAnalysisDialog(true)}
+                    onFindSimilar={handleFindSimilar}
                   />
-                : <WelcomeScreen
+                : !narrow && <WelcomeScreen
                     networks={NETWORKS.map(n => ({
                         type: n.type,
                         connected: n.accounts.length > 0,
@@ -791,14 +492,25 @@ const DashboardPage = () => {
                     onPickNetwork={setFilter}
                     onAddAccount={() => setOpenAddAccountDialog(true)}
                     onOpenContacts={() => setOpenContactsDialog(true)}
+                    onOpenChat={openChatById}
+                    onOpenPalette={() => setOpenPalette(true)}
                   />
             }
 
-            <TelegramDialog open={openTelegramDialog} onClose={() => setOpenTelegramDialog(false)} step={tgStep} phone={tgPhone} code={tgCode} password={tgPassword} error={tgError} loading={tgLoading} onPhoneChange={setTgPhone} onCodeChange={setTgCode} onPasswordChange={setTgPassword} onSendCode={handleSendCode} onSignIn={handleSignIn} onSignInPassword={handleSignInPassword} />
-            <SlackDialog open={openSlackDialog} onClose={() => setOpenSlackDialog(false)} token={slackToken} onTokenChange={setSlackToken} onConnect={handleConnectSlack} loading={slackLoading} error={slackError} />
-            <DiscordDialog open={openDiscordDialog} onClose={() => setOpenDiscordDialog(false)} token={discordToken} onTokenChange={setDiscordToken} onConnect={handleConnectDiscord} loading={discordLoading} error={discordError} />
-            <WhatsAppDialog open={openWhatsAppDialog} onClose={() => setOpenWhatsAppDialog(false)} onConnected={handleWhatsAppConnected} />
-            <ViberDialog open={openViberDialog} onClose={() => setOpenViberDialog(false)} token={viberToken} onTokenChange={setViberToken} onConnect={handleConnectViber} loading={viberLoading} error={viberError} />
+            <CommandPalette
+                open={openPalette}
+                onClose={() => setOpenPalette(false)}
+                chats={everyChat}
+                actions={paletteActions}
+                onOpenChat={openChatById}
+            />
+
+            <TelegramDialog open={connectDialog === 'TELEGRAM'} onClose={() => setConnectDialog(null)} onConnected={() => handleConnected('TELEGRAM')} />
+            <WhatsAppDialog open={connectDialog === 'WHATSAPP'} onClose={() => setConnectDialog(null)} onConnected={() => handleConnected('WHATSAPP')} />
+            {['SLACK', 'DISCORD', 'VIBER'].map(type => (
+                <TokenConnectDialog key={type} type={type} open={connectDialog === type}
+                                    onClose={() => setConnectDialog(null)} onConnected={() => handleConnected(type)} />
+            ))}
             <AnalysisDialog
                 open={openAnalysisDialog}
                 onClose={() => setOpenAnalysisDialog(false)}
@@ -812,7 +524,8 @@ const DashboardPage = () => {
                 onPick={openChatById}
             />
             <AccountsDialog open={openAccountsDialog} onClose={() => setOpenAccountsDialog(false)} accounts={connectedAccounts} onAdd={() => setOpenAddAccountDialog(true)} />
-            <AddAccountDialog open={openAddAccountDialog} onClose={() => setOpenAddAccountDialog(false)} onSelect={handleMessengerSelect} />
+            <AddAccountDialog open={openAddAccountDialog} onClose={() => setOpenAddAccountDialog(false)} onSelect={setConnectDialog} />
+            <SystemStatusDialog open={openSystemStatus} onClose={() => setOpenSystemStatus(false)} />
             <ContactsDialog
                 open={openContactsDialog}
                 onClose={() => { setOpenContactsDialog(false); loadContacts(); }}

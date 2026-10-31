@@ -7,11 +7,7 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 /**
- * Sends text to a chat without the caller knowing which messenger it is.
- *
- * The five services grew their own send signatures — Telegram returns a map and takes a
- * reply id, the rest return nothing — which is fine where a controller already knows the
- * network it is talking to. Anything acting across all five needs one door, and this is it.
+ * Sends text to a chat of any network through one method, for code that acts across all of them.
  */
 @Service
 @RequiredArgsConstructor

@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 @Entity
@@ -46,6 +47,13 @@ public class User {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    /**
+     * When the password last changed or all sessions were ended. Tokens issued before this moment
+     * are rejected.
+     */
+    @Column(name = "credentials_changed_at")
+    private Instant credentialsChangedAt;
 
     @Builder.Default
     @Enumerated(EnumType.STRING)

@@ -14,16 +14,9 @@ import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 /**
- * What can be known about a conversation without asking a model.
- *
- * Everything here is arithmetic over timestamps and message lengths: exact, reproducible,
- * and cheap enough to run over every chat the user has. That matters beyond tidiness — it
- * is the filter that makes local inference affordable. A 7B model on a CPU cannot read
- * fifty chats, but it can read the three these numbers single out.
- *
- * Care is taken to say nothing when there is nothing to say. A median response time drawn
- * from two replies is noise wearing a number's clothes, so counts are reported alongside
- * every derived figure and thin samples are left null rather than dressed up.
+ * Conversation metrics computed without a model: arithmetic over timestamps and lengths, exact and
+ * cheap enough to run on every chat. They pick which chats the model reads. Derived figures come
+ * with their sample sizes, and thin samples are left null.
  */
 @Service
 @RequiredArgsConstructor
@@ -33,8 +26,8 @@ public class ChatMetricsService {
     private final MessageRepository messageRepository;
 
     /**
-     * A gap this long means the next message starts a conversation rather than continuing
-     * one. Six hours is chosen to survive a night's sleep without swallowing a working day.
+     * A gap after which the next message starts a new conversation. Six hours spans a night without
+     * swallowing a working day.
      */
     private static final Duration CONVERSATION_GAP = Duration.ofHours(6);
 
@@ -46,12 +39,7 @@ public class ChatMetricsService {
 
     public record Metrics(Map<String, Object> values, int messageCount) {}
 
-    /**
-     * Computes the requested metrics for one chat.
-     *
-     * Messages come from the local archive, which grows on its own in the background, so a
-     * chat that has never been opened still has something to measure — however little.
-     */
+    /** Computes the requested metrics for one chat from the local archive. */
     @Transactional(readOnly = true)
     public Metrics compute(Long chatId, Set<AnalysisMetric> requested) {
         List<Message> messages = new ArrayList<>(messageRepository.findByChatIdOrderByTimestampDesc(chatId));
@@ -215,10 +203,8 @@ public class ChatMetricsService {
     }
 
     /**
-     * Whether the last word was theirs, and how long ago.
-     *
-     * Measured against the archive rather than the messenger's own unread flag: a chat can
-     * be marked read and still be unanswered, which is exactly the case worth surfacing.
+     * Whether the last word was the other side's, and how long ago — from the archive, since a chat
+     * can be read and still unanswered.
      */
     private Map<String, Object> debt(List<Message> messages) {
         Message last = messages.get(messages.size() - 1);

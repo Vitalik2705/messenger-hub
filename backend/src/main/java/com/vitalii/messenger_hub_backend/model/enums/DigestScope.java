@@ -3,15 +3,8 @@ package com.vitalii.messenger_hub_backend.model.enums;
 import java.util.List;
 
 /**
- * Which chats a digest is about.
- *
- * A digest answers "what did I miss", and a news channel never wrote to anybody — it posted,
- * as it does every hour, whether or not the user existed. Counting those alongside messages
- * from friends buries the three that were actually addressed to them under two hundred that
- * were not. Bots and the messenger's own service account are the same story.
- *
- * Groups sit in between: a dormitory chat is noise on some days and the only thing that
- * mattered on others, so it is the user's call rather than a default.
+ * Which chats a digest counts. Channels, bots and service accounts post regardless of the user and
+ * would bury personal messages; groups are the user's choice.
  */
 public enum DigestScope {
 

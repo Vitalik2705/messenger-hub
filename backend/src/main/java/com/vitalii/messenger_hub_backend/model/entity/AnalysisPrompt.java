@@ -11,14 +11,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * A question the user wants asked of their conversations, in their own words.
- *
- * The built-in metrics answer what can be counted. This is the other half: anything that
- * needs reading rather than counting — "чи є тут ознаки конфлікту", "які теми повторюються
- * найчастіше" — is a question only the person who owns the correspondence knows to ask.
- *
- * Stored per user and reusable across chats, which is what makes it a metric rather than a
- * one-off prompt: the same question asked of ten chats is a comparison.
+ * A user-written question asked of conversations (e.g. "чи є тут ознаки конфлікту"). Stored per
+ * user and reusable across chats, so the same question can be compared between chats.
  */
 @Entity
 @Table(

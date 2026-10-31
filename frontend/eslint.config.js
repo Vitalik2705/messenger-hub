@@ -23,7 +23,15 @@ export default defineConfig([
       },
     },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]', argsIgnorePattern: '^[A-Z_]', ignoreRestSiblings: true }],
+      // A const read before its line is a crash on first render that no other rule reports.
+      // Calls from inside closures run later and are fine, hence functions/variables: false.
+      'no-use-before-define': ['error', { functions: false, variables: false, classes: true }],
+      // Context modules export their hook next to the provider, which is the usual shape.
+      'react-refresh/only-export-components': ['error', {
+        allowConstantExport: true,
+        allowExportNames: ['useAuth', 'useThemeMode', 'useToast', 'usePresentation'],
+      }],
     },
   },
 ])

@@ -12,13 +12,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * One sweep across every chat, and the ranking it produced.
- *
- * This is the feature the whole cheap-metrics layer was built for. Computing arithmetic
- * over fifty conversations costs milliseconds, so it can be done for all of them; reading
- * fifty of them with a 7B model on a CPU would take an hour, so it is done for three. The
- * table below is how the three are chosen — and it is worth keeping on its own, because a
- * ranked list of who is waiting longest is already an answer.
+ * One sweep across every chat and the ranking it produced; the model then reads only the top few.
  */
 @Entity
 @Table(
@@ -65,13 +59,7 @@ public class AnalysisBatch {
     @Column(name = "model")
     private String model;
 
-    /**
-     * The full ranked table, as JSON.
-     *
-     * Stored rather than recomputed for the same reason a run is: it describes the chats as
-     * they stood at one moment, and "who was waiting longest" is a different answer an hour
-     * later. Two batches a month apart are a comparison; a live query is not.
-     */
+    /** The full ranked table as JSON, stored because it describes the chats at one moment. */
     @Column(name = "table_json", columnDefinition = "TEXT")
     private String tableJson;
 

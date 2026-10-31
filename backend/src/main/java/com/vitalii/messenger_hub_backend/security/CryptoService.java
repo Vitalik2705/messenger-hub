@@ -13,15 +13,11 @@ import java.security.SecureRandom;
 import java.util.Base64;
 
 /**
- * Symmetric encryption for credentials stored in the database.
+ * AES-GCM encryption of messenger credentials in the database. A Telegram StringSession gives full
+ * account access without password or 2FA, so it must not be stored in clear text.
  *
- * Messenger credentials are not ordinary secrets: a Telegram StringSession grants full
- * access to the account without password or 2FA, so it must not sit in the database in
- * clear text.
- *
- * Values are stored as {@code enc:v1:<base64(iv || ciphertext||tag)>}. The prefix lets
- * {@link #decrypt} recognise rows written before encryption was introduced and return
- * them unchanged — they are re-encrypted the next time the entity is saved.
+ * Format: {@code enc:v1:<base64(iv || ciphertext || tag)>}. Values without the prefix are older
+ * plain rows and are returned unchanged.
  */
 @Service
 @Slf4j

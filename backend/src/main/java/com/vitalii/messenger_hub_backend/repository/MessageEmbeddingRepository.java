@@ -21,10 +21,7 @@ public interface MessageEmbeddingRepository extends JpaRepository<MessageEmbeddi
                                      @Param("afterId") Long afterId);
 
     /**
-     * Messages of one user that still have no vector for this model.
-     *
-     * Short texts are skipped outright: "ок" and "+" carry no meaning to embed, and they
-     * are a large share of any real archive.
+     * A user's messages without a vector for this model. Very short texts ("ок", "+") are skipped.
      */
     @Query(value = """
             SELECT m.id, coalesce(m.text, m.transcript), m.chat_id

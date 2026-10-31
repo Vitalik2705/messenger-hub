@@ -1,13 +1,7 @@
 import { MESSENGER_COLORS } from '../theme/tokens';
+import { t, LOCALE } from '../i18n';
 
-/**
- * Formatting helpers, shared so the app speaks with one voice.
- *
- * The locale is named explicitly everywhere. Passing `[]` — as the chat list used to —
- * hands the choice to the operating system, which is how a Ukrainian interface ended up
- * printing `06:59 PM`.
- */
-const LOCALE = 'uk-UA';
+/** Formatting helpers. The locale is always explicit, never left to the operating system. */
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -30,7 +24,7 @@ export function formatListTime(value) {
     const elapsed = Date.now() - date.getTime();
 
     if (elapsed < DAY && date.getDate() === new Date().getDate()) return formatClock(date);
-    if (elapsed < 2 * DAY) return 'Вчора';
+    if (elapsed < 2 * DAY) return t('Вчора');
     if (elapsed < 7 * DAY) return date.toLocaleDateString(LOCALE, { weekday: 'short' });
     if (date.getFullYear() === new Date().getFullYear()) {
         return date.toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' });
@@ -46,8 +40,8 @@ export function formatDayLabel(value) {
     const yesterday = new Date(today.getTime() - DAY);
 
     const sameDay = (a, b) => a.toDateString() === b.toDateString();
-    if (sameDay(date, today)) return 'Сьогодні';
-    if (sameDay(date, yesterday)) return 'Вчора';
+    if (sameDay(date, today)) return t('Сьогодні');
+    if (sameDay(date, yesterday)) return t('Вчора');
     if (date.getFullYear() === today.getFullYear()) {
         return date.toLocaleDateString(LOCALE, { day: 'numeric', month: 'long' });
     }
@@ -60,18 +54,20 @@ export function formatDuration(totalSeconds) {
     return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
+/** File sizes the way a person reads them: 640 Б, 84 КБ, 2.4 МБ. */
+export function formatBytes(bytes) {
+    if (!bytes) return '';
+    if (bytes < 1024) return t('{0} Б', bytes);
+    if (bytes < 1024 * 1024) return t('{0} КБ', Math.round(bytes / 1024));
+    return t('{0} МБ', (bytes / (1024 * 1024)).toFixed(1));
+}
+
 export function formatCount(value) {
     const count = value || 0;
     return count > 99 ? '99+' : String(count);
 }
 
-/**
- * A faint wash of the network's own colour, used behind avatars that have no picture.
- *
- * It replaces a set of eight rainbow gradients picked by the first character of the name —
- * decoration that carried no information and made a list of twelve chats look like a
- * paint chart. This at least says something true about the row.
- */
+/** A faint tint of the network's colour behind avatars without a picture. */
 export function avatarTint(messengerType) {
     const base = MESSENGER_COLORS[messengerType] || '#8A8F98';
     return `${base}26`; // ~15% alpha
@@ -82,5 +78,7 @@ export function initialsOf(name) {
     const words = name.trim().split(/\s+/).filter(Boolean);
     if (words.length === 0) return '?';
     if (words.length === 1) return words[0].charAt(0).toUpperCase();
+    // "Контакт 12" (a presentation alias) → "К12", not "К1"
+    if (/^\d+$/.test(words[1])) return words[0].charAt(0).toUpperCase() + words[1];
     return (words[0].charAt(0) + words[1].charAt(0)).toUpperCase();
 }

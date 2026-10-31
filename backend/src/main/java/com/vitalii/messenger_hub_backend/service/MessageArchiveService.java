@@ -22,11 +22,9 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Persists messages that pass through the platform so the history accumulates locally
- * instead of being fetched from the messenger API and thrown away.
- *
- * Archiving is a side effect of reading a chat: it must never break the read, so every
- * entry point swallows failures, and the work runs in its own transaction.
+ * Stores messages that pass through the platform, so history accumulates locally. Archiving is a
+ * side effect of reading and must never break the read: failures are swallowed and the work has its
+ * own transaction.
  */
 @Service
 @RequiredArgsConstructor
@@ -41,8 +39,8 @@ public class MessageArchiveService {
     private final WebSocketController webSocketController;
     private final org.springframework.context.ApplicationEventPublisher events;
     /**
-     * Self-reference through the container: calling {@link #store} directly would bypass
-     * the proxy and silently lose its REQUIRES_NEW semantics.
+     * Self-reference through the container, so calls to store() go through the proxy and keep
+     * REQUIRES_NEW.
      */
     private final ObjectProvider<MessageArchiveService> self;
 
@@ -90,20 +88,11 @@ public class MessageArchiveService {
         }
     }
 
-    /**
-     * Runs in its own transaction so a failure cannot roll back the caller's work,
-     * and a caller without a transaction still gets atomic inserts.
-     */
+    /** Its own transaction, so a failure cannot roll back the caller's work. */
     /** What was actually written, plus the owner to notify. */
     /**
-     * Drops the archived copy of a message the user has just deleted in the messenger.
-     *
-     * Called after the deletion succeeds upstream, not before: if the messenger refuses,
-     * the local copy is still the truth and must stay.
-     *
-     * Failures here are logged rather than raised. The message is already gone where it
-     * mattered, and turning a successful deletion into an error would tell the user the
-     * opposite of what happened.
+     * Drops the archived copy of a message deleted in the messenger. Called only after the
+     * messenger confirmed; failures are logged, not raised, since the deletion itself succeeded.
      */
     @Transactional
     public void forget(Long messengerAccountId, String externalChatId, String externalMessageId) {
@@ -118,6 +107,16 @@ public class MessageArchiveService {
                     });
         } catch (Exception e) {
             log.warn("Failed to forget archived message {}: {}", externalMessageId, e.getMessage());
+        }
+    }
+
+    /** After an edit succeeds upstream: the archive keeps what the message says now. */
+    public void rewrite(Long messengerAccountId, String externalChatId, String externalMessageId, String text) {
+        try {
+            chatRepository.findByMessengerAccountIdAndExternalChatId(messengerAccountId, externalChatId)
+                    .ifPresent(chat -> messageRepository.updateArchivedText(chat.getId(), externalMessageId, text));
+        } catch (Exception e) {
+            log.warn("Failed to rewrite archived message {}: {}", externalMessageId, e.getMessage());
         }
     }
 
@@ -163,8 +162,8 @@ public class MessageArchiveService {
     }
 
     /**
-     * The stored row carries the identifiers the frontend matches on (chatId, id), while
-     * the fetched DTO carries presentation fields that are not archived, such as media.
+     * Merges the stored row's identifiers (chatId, id) into the fetched DTO, which carries the
+     * presentation fields.
      */
     private MessageDTO toPublishedDto(Message message, Chat chat, MessageDTO source) {
         return MessageDTO.builder()
@@ -202,10 +201,7 @@ public class MessageArchiveService {
                 .build();
     }
 
-    /**
-     * Base64 media would dwarf the useful content, so only its metadata is kept.
-     * Returns null when the message carries no media.
-     */
+    /** Only media metadata is archived, never the base64 bytes. Null when there is no media. */
     private String describeAttachment(MessageDTO dto) {
         if (dto.getMediaType() == null || dto.getMediaType().isBlank()) return null;
         StringBuilder json = new StringBuilder("{\"type\":\"").append(escape(dto.getMediaType())).append('"');

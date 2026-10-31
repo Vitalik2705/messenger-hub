@@ -3,15 +3,8 @@ package com.vitalii.messenger_hub_backend.model.enums;
 import java.util.Map;
 
 /**
- * What "interesting" means when scanning every chat at once.
- *
- * The point of a batch is not to read fifty analyses — nobody does — but to decide which
- * three are worth the model's time. Each ranking below turns a chat's metrics into a single
- * comparable number, and the top of that list is what gets read.
- *
- * Chats that cannot answer a given question score null and drop out rather than sorting to
- * one end: a chat with four replies has no median response time, and putting it first
- * because "0" sorts low would be the ranking lying about its own confidence.
+ * Ways to rank chats in a batch, each turning a chat's metrics into one comparable score. Chats
+ * that cannot answer the question score null and drop out rather than sorting to an end.
  */
 public enum BatchRanking {
 
@@ -39,10 +32,7 @@ public enum BatchRanking {
         }
     },
 
-    /**
-     * The exchanges shrinking fastest. Scored as the negated slope, so the steepest
-     * decline sorts first while chats that are growing fall to the bottom.
-     */
+    /** Conversations shrinking fastest: the negated slope, so the steepest decline comes first. */
     FADING("Найшвидше згасають") {
         @Override
         public Double score(Map<String, Object> metrics) {

@@ -225,14 +225,8 @@ public class ViberService {
     }
 
     /**
-     * Not supported, and not for lack of plumbing.
-     *
-     * The Viber bot API accepts media only as a public URL it can fetch itself — there is no
-     * upload endpoint to send bytes to. Supporting this would mean hosting every attachment
-     * somewhere publicly reachable, which is a different feature with its own privacy
-     * consequences, not a missing parameter here.
-     *
-     * Failing loudly beats a send that silently does nothing.
+     * Not supported: the Viber bot API accepts media only as a public URL it fetches itself, which
+     * would mean publishing attachments. Fails loudly rather than silently doing nothing.
      */
     public void sendMedia(Long userId, String viberUserId,
                           MediaUploadValidator.ValidatedMedia media, Long accountId) {
@@ -242,10 +236,7 @@ public class ViberService {
 
     // ── DELETE ────────────────────────────────────────────────────────────────
 
-    /**
-     * Not supported. The Viber bot API has no endpoint for removing a sent message, so
-     * there is nothing to call — a bot can only stop sending, never take back.
-     */
+    /** Not supported: the Viber bot API cannot delete a sent message. */
     public void deleteMessage(Long userId, String viberUserId, String messageId, Long accountId) {
         throw new UnsupportedOperationException(
                 "Viber не дозволяє видаляти надіслані повідомлення через API бота");

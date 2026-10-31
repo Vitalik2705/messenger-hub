@@ -53,11 +53,8 @@ public class Message {
     private Boolean isFromUser = false;
 
     /**
-     * What a voice message said.
-     *
-     * Kept beside the text rather than written into it: the record of what was actually
-     * sent must stay a record of what was sent. A transcript is a derived reading, it can
-     * be wrong, and everything showing it says so.
+     * The transcript of a voice message, kept separate from the text: the text is what was sent,
+     * the transcript a derived and possibly wrong reading.
      */
     @Column(name = "transcript", columnDefinition = "TEXT")
     private String transcript;

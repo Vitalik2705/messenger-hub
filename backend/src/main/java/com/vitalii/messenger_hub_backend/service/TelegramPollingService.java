@@ -18,7 +18,12 @@ public class TelegramPollingService {
     private final MessengerAccountRepository messengerAccountRepository;
     private final TelegramService telegramService;
 
-    @Scheduled(fixedDelay = 10000) // every 10 seconds
+    /**
+     * Keeps chat rows (unread counts, last activity) current while nobody has the dashboard open.
+     * Once a minute: each tick fetches the dialog list of every account.
+     */
+    @Scheduled(fixedDelayString = "${telegram.sync.interval-ms:60000}",
+            initialDelayString = "${telegram.sync.initial-delay-ms:30000}")
     public void pollTelegramUpdates() {
         try {
             List<MessengerAccount> accounts = messengerAccountRepository

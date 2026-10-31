@@ -29,6 +29,16 @@ public class MessageDTO {
     private String mediaMime;
     private String fileName;
     private Integer duration;    // seconds, for audio/video
+    // Known before the bytes are fetched, so the client can reserve the box and the
+    // conversation does not jump as each picture arrives.
+    private Integer mediaWidth;
+    private Integer mediaHeight;
+    private Long fileSize;
+    /** Telegram's own preview of a link in the message: url, site, title, description. */
+    private java.util.Map<String, Object> linkPreview;
+    /** Emoji reactions: emoji, count, mine. */
+    private java.util.List<java.util.Map<String, Object>> reactions;
+    private Boolean edited;
 
     private String replyToMessageId;
     private String replyToText;

@@ -11,17 +11,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
-/**
- * Progress of voice transcription, and a way to hurry it along.
- *
- * The job runs on its own and needs no attention — but a background process with no visible
- * state is indistinguishable from one that is broken. This exists so the answer to "is it
- * working" is a number rather than a guess.
- */
+/** Progress of voice transcription. */
 @RestController
 @RequestMapping("/api/transcription")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class TranscriptionController {
 
     private final TranscriptionService transcriptionService;
@@ -35,11 +28,8 @@ public class TranscriptionController {
     }
 
     /**
-     * Transcribes one voice message now and hands back the text.
-     *
-     * Synchronous on purpose: the caller is a person looking at that clip, the wait is
-     * roughly the length of the audio, and a queued job they would have to poll for would
-     * be a worse answer to "what does this say".
+     * Transcribes one voice message and returns the text. Synchronous: the wait is about the clip's
+     * length.
      */
     public record MessageRequest(Long accountId, String externalChatId, String externalMessageId) {}
 
@@ -66,13 +56,7 @@ public class TranscriptionController {
         return message == null || message.isBlank() ? "Не вдалося розшифрувати" : message;
     }
 
-    /**
-     * Runs one batch immediately instead of waiting for the next tick.
-     *
-     * Bounded to the same batch size as the scheduled job: this is "do it now", not "do all
-     * of it now", and a request that transcribed a thousand clips would hold the CPU for
-     * hours while the rest of the application waited.
-     */
+    /** Runs one batch now, of the same bounded size as the scheduled job. */
     @PostMapping("/run")
     public ResponseEntity<Map<String, Object>> runNow() {
         if (!transcriptionService.isReachable()) {

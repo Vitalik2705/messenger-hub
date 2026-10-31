@@ -21,11 +21,8 @@ import java.time.LocalDateTime;
 import java.util.*;
 
 /**
- * Analyses of chats: requesting them, reading them back, and recording what they found.
- *
- * The work itself lives in {@link AnalysisRunner}, on another thread. This class owns only
- * the database side, which keeps every transaction short — an inference call takes minutes
- * on a CPU, and holding a pooled connection open across it would be a waste of the pool.
+ * The database side of chat analyses: requesting, reading back and recording results. The work runs
+ * in AnalysisRunner on another thread, so every transaction here stays short.
  */
 @Service
 @RequiredArgsConstructor
@@ -55,18 +52,12 @@ public class ChatAnalysisService {
                           List<PromptSpec> prompts) {}
 
     /**
-     * Accepts a request and returns immediately with a queued run.
-     *
-     * The client polls the run it was handed rather than waiting on the response: on this
-     * hardware a model call is measured in tens of seconds, which is past every sensible
-     * HTTP timeout and well past the point where a spinner is honest.
+     * Returns a queued run immediately; the client polls it, since a model call takes longer than
+     * any sensible HTTP timeout.
      */
     /**
-     * Queues one run per model, so two models can be judged on the same conversation.
-     *
-     * The comparison only means anything because everything else is held identical: the
-     * same chat, the same questions, the same slice of history, launched at the same
-     * moment. Running them one after another by hand would change at least the messages.
+     * Queues one run per model on the same chat, questions and message slice, so models can be
+     * compared fairly.
      */
     @Transactional
     public List<AnalysisRun> requestComparison(String email, Long chatId, Set<AnalysisMetric> metrics,
@@ -161,12 +152,7 @@ public class ChatAnalysisService {
                 resolvePrompts(run.getUser().getId(), run.getPromptIds()));
     }
 
-    /**
-     * Reads the selected questions as they stand right now.
-     *
-     * A prompt deleted between queueing and running simply drops out — the run reports what
-     * it could ask rather than failing over a question that no longer exists.
-     */
+    /** The selected prompts as they are now; one deleted since queueing is simply skipped. */
     private List<PromptSpec> resolvePrompts(Long userId, String csv) {
         if (csv == null || csv.isBlank()) return List.of();
         List<Long> ids = new ArrayList<>();

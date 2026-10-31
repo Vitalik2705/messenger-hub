@@ -18,17 +18,13 @@ const searchService = {
             signal,
         }),
 
-    /**
-     * Search by meaning rather than by word.
-     *
-     * A separate call, not a flag: it answers a different question and comes back without
-     * a snippet, because nothing was matched literally to highlight.
-     */
+    /** Search by meaning. Results carry no snippet, since nothing matched literally. */
     searchSemantic: (query, { limit, signal } = {}) =>
         api.get('/search/semantic', { params: { q: query, limit }, signal }),
 
-    /** How much of the archive has been embedded so far. */
-    semanticStatus: () => api.get('/search/semantic/status'),
+    // Both searches merged into one ranking (Reciprocal Rank Fusion on the server).
+    searchHybrid: (query, { messenger, limit, signal } = {}) =>
+        api.get('/search/hybrid', { params: { q: query, messenger, limit }, signal }),
 };
 
 export default searchService;

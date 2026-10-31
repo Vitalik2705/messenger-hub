@@ -1,6 +1,6 @@
 import SockJS from 'sockjs-client';
 import { Client } from '@stomp/stompjs';
-import { SERVER_URL } from './api';
+import { SERVER_URL, getFreshAccessToken } from './api';
 
 class WebSocketService {
     constructor() {
@@ -20,6 +20,16 @@ class WebSocketService {
             // after a drop, so reconnects need a fresh one each time.
             webSocketFactory: () => new SockJS(`${SERVER_URL}/ws`),
             connectHeaders: { Authorization: `Bearer ${token}` },
+            // A fresh token on every connect attempt: the access token lives 15 minutes, and a
+            // reconnect with an expired one is refused forever.
+            beforeConnect: async (client) => {
+                try {
+                    client.connectHeaders = { Authorization: `Bearer ${await getFreshAccessToken()}` };
+                } catch {
+                    // Refresh failed; the next attempt tries again, and the HTTP side
+                    // sends the user to the login page if the session is really over.
+                }
+            },
             debug: () => {},
             reconnectDelay: 5000,
             heartbeatIncoming: 4000,

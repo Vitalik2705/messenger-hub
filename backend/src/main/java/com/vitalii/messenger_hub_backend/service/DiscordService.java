@@ -224,10 +224,7 @@ public class DiscordService {
     }
 
     /**
-     * Uploads an attachment to a channel.
-     *
-     * Discord takes any file and plays audio inline itself, so a recording needs no special
-     * handling here — unlike Telegram, there is no separate voice-note type to qualify for.
+     * Uploads an attachment. Discord plays audio inline, so recordings need no special handling.
      */
     public void sendMedia(Long userId, String channelId,
                           MediaUploadValidator.ValidatedMedia media, Long accountId) {
@@ -246,12 +243,7 @@ public class DiscordService {
 
     // ── DELETE ────────────────────────────────────────────────────────────────
 
-    /**
-     * Deletes a message for everyone, then drops the archived copy.
-     *
-     * Order matters: if Discord refuses the deletion the local copy is still the truth,
-     * so the archive is only cleaned once the messenger has confirmed.
-     */
+    /** Deletes a message for everyone, and the archived copy only after Discord confirms. */
     public void deleteMessage(Long userId, String channelId, String messageId, Long accountId) {
         MessengerAccount account = accountId != null
                 ? resolveAccount(userId, accountId)

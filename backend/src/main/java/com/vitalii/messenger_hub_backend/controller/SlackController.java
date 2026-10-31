@@ -22,7 +22,6 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/slack")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class SlackController {
 
     private final SlackService slackService;
@@ -101,12 +100,7 @@ public class SlackController {
     }
 
 
-    /**
-     * Sends an attachment — picture, file, or voice recording.
-     *
-     * Validation runs before the messenger is touched, so an oversized or malformed upload
-     * is rejected here rather than surfacing as an obscure failure from Slack.
-     */
+    /** Sends a picture, file or voice recording, validated before Slack is called. */
     @PostMapping("/send-media")
     public ResponseEntity<?> sendMedia(
             @AuthenticationPrincipal UserDetails userDetails,

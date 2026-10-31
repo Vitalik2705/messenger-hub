@@ -12,17 +12,20 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class RegisterRequest {
 
-    @NotBlank(message = "Email is required")
-    @Email(message = "Email should be valid")
+    @NotBlank(message = "Введіть електронну пошту")
+    @Email(message = "Некоректна електронна пошта")
     private String email;
 
-    @NotBlank(message = "Password is required")
-    @Size(min = 8, message = "Password must be at least 8 characters")
+    @NotBlank(message = "Введіть пароль")
+    @Size(min = 8, max = 128, message = "Пароль має містити від 8 до 128 символів")
     private String password;
 
-    @NotBlank(message = "Password confirmation is required")
+    @NotBlank(message = "Підтвердіть пароль")
     private String confirmPassword;
 
+    @Size(max = 60, message = "Ім'я — до 60 символів")
     private String firstName;
+
+    @Size(max = 60, message = "Прізвище — до 60 символів")
     private String lastName;
 }

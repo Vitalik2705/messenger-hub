@@ -11,11 +11,8 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * A proposal that two identities belong to the same person, awaiting the user's judgement.
- *
- * The pair is always stored with the lower identity id first. Without that, the same two
- * handles could be recorded twice in opposite orders and the unique constraint would let
- * both through — the user would then be asked the same question twice.
+ * A proposed link between two identities, awaiting the user's decision. Stored with the lower
+ * identity id first, so the unique constraint covers both orders.
  */
 @Entity
 @Table(

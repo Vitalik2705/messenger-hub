@@ -4,3 +4,4 @@ uvicorn==0.30.0
 python-dotenv==1.0.0
 aiofiles==23.2.1
 pydantic
+qrcode==7.4.2

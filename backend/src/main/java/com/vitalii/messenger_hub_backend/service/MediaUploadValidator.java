@@ -10,11 +10,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Checks an outgoing attachment before it reaches a messenger.
- *
- * The backend is a pass-through here: it never decodes the payload. Size is judged from the
- * base64 length instead, which is exact enough — decoding a 20 MB upload just to measure it
- * would double the memory cost of every send for no added certainty.
+ * Checks an outgoing attachment before it reaches a messenger. Size is judged from the base64
+ * length rather than by decoding the payload.
  */
 @Component
 @Slf4j
@@ -34,10 +31,7 @@ public class MediaUploadValidator {
         this.maxBytes = maxBytes;
     }
 
-    /**
-     * A validated attachment, ready to forward. Immutable and already normalised, so no
-     * messenger service has to repeat any of this.
-     */
+    /** A validated, normalised attachment ready to forward. */
     public record ValidatedMedia(String base64, String mimeType, String fileName,
                                  MediaKind kind, Integer durationSeconds,
                                  String caption, String replyToMessageId,
@@ -89,9 +83,8 @@ public class MediaUploadValidator {
     }
 
     /**
-     * Browsers hand back recordings as "data:audio/webm;base64,GkXf..." when the client
-     * uses a FileReader. Accepting both shapes costs one line and removes a failure mode
-     * that would otherwise surface as a corrupt file at the far end.
+     * Accepts both raw base64 and a data URL ("data:audio/webm;base64,..."), which FileReader
+     * produces.
      */
     private String stripDataUri(String value) {
         int marker = value.indexOf("base64,");
@@ -99,8 +92,8 @@ public class MediaUploadValidator {
     }
 
     /**
-     * A file name from the client reaches a filesystem in some messenger libraries, so path
-     * separators and traversal segments are removed rather than trusted.
+     * Strips path separators and traversal segments: some messenger libraries write the name to
+     * disk.
      */
     private String safeFileName(String raw, MediaKind kind, String mimeType) {
         if (raw == null || raw.isBlank()) return defaultFileName(kind, mimeType);

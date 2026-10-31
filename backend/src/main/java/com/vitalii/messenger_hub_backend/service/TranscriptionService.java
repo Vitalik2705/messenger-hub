@@ -18,15 +18,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Gives voice messages a text the rest of the application can read.
- *
- * A voice note is a hole in the archive: search cannot reach it, no metric counts it, and
- * a model shown the conversation sees nothing where it sat. In chats that are half voice
- * that is most of the content. Transcribing turns it into ordinary text, and every feature
- * downstream gains it for free.
- *
- * The audio itself is never stored. Media is deliberately left out of the archive, so each
- * clip is fetched from the messenger, transcribed, and dropped — what remains is the text.
+ * Turns voice messages into text, so search, metrics and the model can use them. The audio is
+ * fetched from the messenger, transcribed and discarded; only the text is stored.
  */
 @Service
 @RequiredArgsConstructor
@@ -45,13 +38,8 @@ public class TranscriptionService {
     private boolean enabled;
 
     /**
-     * Whether to work through the backlog on a timer. Off by default, and deliberately.
-     *
-     * Transcription runs at roughly the length of the clip and has to pull the audio back
-     * through the same messenger connection the open chat is waiting on. A timer that keeps
-     * doing that is a background job competing with the person using the application — and
-     * on this hardware the person loses. A voice note is transcribed when someone asks for
-     * that voice note.
+     * Whether a timer works through the backlog. Off by default: transcription takes about as long
+     * as the clip and competes with the open chat for the messenger connection.
      */
     @Value("${whisper.background:false}")
     private boolean backgroundEnabled;
@@ -119,14 +107,10 @@ public class TranscriptionService {
     }
 
     /**
-     * Transcribes one message on request, and returns the text.
-     *
-     * The background job exists so the archive fills in by itself; this exists because a
-     * person looking at one voice note wants that one now, not in the next two-minute tick.
-     * Both go through the same path — the only difference is who asked.
+     * Transcribes one message on request and returns the text, through the same path as the
+     * background job.
      */
     /** Same as below, addressed the way the client can address it. */
-    @Transactional(readOnly = true)
     public String transcribeMessage(Long userId, Long accountId,
                                     String externalChatId, String externalMessageId) {
         Long messageId = messageRepository.findIdByExternalIds(accountId, externalChatId, externalMessageId);
@@ -138,7 +122,9 @@ public class TranscriptionService {
         return transcribeMessage(userId, messageId);
     }
 
-    @Transactional(readOnly = true)
+    // Deliberately not @Transactional: a read-only transaction here swallowed the write in
+    // mark() (Hibernate never flushes it), and it would hold a connection for the whole
+    // download and transcription. Each repository call commits on its own.
     public String transcribeMessage(Long userId, Long messageId) {
         List<Object[]> route = messageRepository.findMediaRoute(messageId);
         if (route.isEmpty()) throw new IllegalArgumentException("Повідомлення не знайдено");
@@ -155,17 +141,17 @@ public class TranscriptionService {
                     "Розшифровка поки що працює лише для Telegram");
         }
 
-        transcribeOne(messageId, (String) row[0], (String) row[1], ((Number) row[2]).longValue());
-        return messageRepository.findById(messageId).map(Message::getTranscript).orElse(null);
+        return transcribeOne(messageId, (String) row[0], (String) row[1], ((Number) row[2]).longValue());
     }
 
+    /** Returns the transcript, or null when there is nothing to read. */
     @SuppressWarnings("unchecked")
-    private void transcribeOne(Long messageId, String externalMessageId,
+    private String transcribeOne(Long messageId, String externalMessageId,
                                String externalChatId, Long accountId) {
         Long userId = accounts.ownerOf(accountId);
         if (userId == null) {
             mark(messageId, null, "SKIPPED");
-            return;
+            return null;
         }
 
         Map<String, Object> media = telegramService.getMessageMedia(
@@ -175,7 +161,7 @@ public class TranscriptionService {
             // The clip is gone from the messenger, or was never audio. Marked so the job
             // does not come back to it every two minutes forever.
             mark(messageId, null, "SKIPPED");
-            return;
+            return null;
         }
 
         Map<String, Object> request = Map.of(
@@ -195,12 +181,13 @@ public class TranscriptionService {
             // Silence, or speech the model could not make out. Recorded as done rather than
             // failed: retrying will produce the same nothing.
             mark(messageId, null, "DONE");
-            return;
+            return null;
         }
 
         mark(messageId, text.trim(), "DONE");
         log.info("Transcribed message {} ({}s audio in {}s)",
                 messageId, body.get("duration"), body.get("took_seconds"));
+        return text.trim();
     }
 
     @Transactional

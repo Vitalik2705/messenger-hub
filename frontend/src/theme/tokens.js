@@ -1,19 +1,9 @@
-/**
- * The design system, in one place.
- *
- * Everything used to be an inline `sx` literal, which meant the palette lived in about
- * fifteen files at once and could not be changed — or given a dark variant — without
- * touching all of them. Components now read these tokens and nothing else.
- */
+import { t } from '../i18n';
+/** Design tokens: colours, radii and type. Components read these instead of literal values. */
 
 /**
- * The messengers' own colours.
- *
- * These are the only saturated hues the interface is allowed to show, and they are the
- * reason the rest of the palette is nearly grey: an aggregator that paints itself in a
- * loud accent ends up competing with the very networks it is aggregating. Four of the
- * five are cool blues and purples, which is what pushes the app's own accent to the warm
- * side — nothing there can be mistaken for a network.
+ * The messengers' brand colours — the only saturated hues in the interface, which is why the rest
+ * of the palette is near-grey.
  */
 export const MESSENGER_COLORS = {
     TELEGRAM: '#2AABEE',
@@ -32,17 +22,9 @@ export const MESSENGER_LABELS = {
 };
 
 /**
- * Neutrals carry a faint cool cast rather than being pure grey — against it the messenger
- * blues and greens read as their real selves instead of drifting warm.
- *
- * Every text colour here clears WCAG AA (4.5:1) against every surface it is used on. The
- * previous `textFaint` sat at 2.66:1 on the page background, which is roughly half the
- * requirement — and it carried every small label, timestamp and hint in the interface, at
- * 10.5px. "Muted" had quietly become "unreadable".
- *
- * `accent` and `accentText` are separate for the same reason: the fill needs white text on
- * it to pass, and the same hue used *as* text on a light ground needs to be darker. One
- * value cannot do both.
+ * Light palette. Neutrals have a slight cool cast. Every text colour meets WCAG AA (4.5:1) on the
+ * surfaces it is used on. `accent` (a fill with white text) and `accentText` (the hue as text) are
+ * separate because one value cannot pass both.
  */
 const light = {
     mode: 'light',
@@ -76,9 +58,8 @@ const light = {
 };
 
 /**
- * Not an inversion of the light palette. Dark surfaces need their separation to come from
- * lightness steps rather than borders, and the accent has to lift to stay legible, so both
- * are tuned rather than flipped.
+ * Dark palette, tuned rather than inverted: separation comes from lightness steps, and the accent
+ * is lifted to stay legible.
  */
 const dark = {
     mode: 'dark',
@@ -113,21 +94,48 @@ const dark = {
 
 export const palettes = { light, dark };
 
-/**
- * One family throughout. The old interface paired a serif display face with a sans body,
- * which is an editorial pairing wearing an application's clothes — the mismatch was the
- * single loudest thing about it.
- */
+/** Accent presets. Each is tuned per mode; light accents carry white text at WCAG AA. */
+export const ACCENTS = {
+    coral: {
+        label: t('Корал'),
+        light: { accent: '#D24525', accentHover: '#B8391C', accentSoft: 'rgba(210, 69, 37, 0.10)', accentText: '#B8391C', onAccent: '#FFFFFF' },
+        dark: { accent: '#FF6146', accentHover: '#FF7862', accentSoft: 'rgba(255, 97, 70, 0.14)', accentText: '#FF7A62', onAccent: '#1A0B07' },
+    },
+    blue: {
+        label: t('Синій'),
+        light: { accent: '#2563EB', accentHover: '#1D4ED8', accentSoft: 'rgba(37, 99, 235, 0.10)', accentText: '#1D4ED8', onAccent: '#FFFFFF' },
+        dark: { accent: '#5B8CFF', accentHover: '#7AA2FF', accentSoft: 'rgba(91, 140, 255, 0.16)', accentText: '#86A9FF', onAccent: '#081022' },
+    },
+    violet: {
+        label: t('Фіолетовий'),
+        light: { accent: '#7C3AED', accentHover: '#6D28D9', accentSoft: 'rgba(124, 58, 237, 0.10)', accentText: '#6D28D9', onAccent: '#FFFFFF' },
+        dark: { accent: '#A78BFA', accentHover: '#C4B5FD', accentSoft: 'rgba(167, 139, 250, 0.16)', accentText: '#BBA6FF', onAccent: '#160D2C' },
+    },
+    green: {
+        label: t('Зелений'),
+        light: { accent: '#0B875C', accentHover: '#08734E', accentSoft: 'rgba(11, 135, 92, 0.10)', accentText: '#08734E', onAccent: '#FFFFFF' },
+        dark: { accent: '#34D399', accentHover: '#6EE7B7', accentSoft: 'rgba(52, 211, 153, 0.15)', accentText: '#4ADEA8', onAccent: '#04200F' },
+    },
+    rose: {
+        label: t('Рожевий'),
+        light: { accent: '#DB2777', accentHover: '#BE185D', accentSoft: 'rgba(219, 39, 119, 0.10)', accentText: '#BE185D', onAccent: '#FFFFFF' },
+        dark: { accent: '#F472B6', accentHover: '#F9A8D4', accentSoft: 'rgba(244, 114, 182, 0.16)', accentText: '#F78CC4', onAccent: '#2A0918' },
+    },
+};
+
+/** File-type colours for attachment cards. */
+export const FILE_COLORS = {
+    pdf: '#E5484D', doc: '#2B6CB0', sheet: '#16A34A', slides: '#EA8A0C',
+    archive: '#A16207', image: '#9333EA', audio: '#0EA5E9', video: '#DB2777', other: '#6B7280',
+};
+
+/** One font family throughout. */
 export const FONT_STACK =
     "'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 
 /**
- * Rounded, but not uniformly — a pill on everything flattens the hierarchy.
- *
- * These are px strings, not numbers, and deliberately so. MUI treats a *numeric*
- * `borderRadius` in `sx` as a multiplier of `theme.shape.borderRadius`, so `radius.lg`
- * written as 13 rendered at 117px and turned every card into a lozenge. A string is
- * passed through untouched, which is the only way a token can mean what it says.
+ * Corner radii. Px strings, not numbers: MUI multiplies a numeric `borderRadius` in `sx` by
+ * `theme.shape.borderRadius`.
  */
 export const radius = {
     sm: '6px',

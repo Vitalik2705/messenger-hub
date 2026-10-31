@@ -19,15 +19,9 @@ import java.time.LocalDateTime;
 import java.util.*;
 
 /**
- * Scans every chat cheaply, ranks them, and spends the model only on the top.
- *
- * This is the cascade the metrics layer exists for. Arithmetic over an archive of fifty
- * conversations costs milliseconds; a 7B model reading the same fifty on a CPU would take
- * the better part of an hour. So the arithmetic runs everywhere and answers the question
- * "which of these deserves an hour's worth of attention" — then the model reads three.
- *
- * The saving is not incidental. Without a filter this feature is impossible on this
- * hardware; with one it takes two minutes.
+ * Scans every chat with cheap metrics, ranks them, and runs the model only on the top few. Metrics
+ * for fifty chats take milliseconds; the model reading all fifty on a CPU would take most of an
+ * hour.
  */
 @Service
 @RequiredArgsConstructor
@@ -76,20 +70,14 @@ public class BatchAnalysisService {
     }
 
     /**
-     * Settings that outlive the request but not the process.
-     *
-     * The prompts and message limit belong to the runs the batch will queue, not to the
-     * batch itself, and adding four columns to store them for the seconds between queueing
-     * and running would be storage pretending to be state.
+     * Per-batch settings held in memory between queueing and running; they belong to the runs the
+     * batch creates.
      */
     private final Map<Long, BatchRequest> pending = new HashMap<>();
 
     /**
-     * Runs the sweep: measure everything, rank it, queue the model on the top few.
-     *
-     * Not transactional, and metrics are computed one chat at a time through a service that
-     * opens its own read transaction. Fifty chats is fifty short reads rather than one long
-     * one holding a connection for the duration.
+     * Runs the sweep: measure every chat, rank, queue the model on the top few. Not transactional;
+     * metrics are read one chat at a time in short transactions.
      */
     public void execute(Long batchId) {
         BatchRequest request = pending.remove(batchId);
@@ -97,8 +85,7 @@ public class BatchAnalysisService {
         try {
             batch = markRunning(batchId);
         } catch (Exception e) {
-            // Anything thrown before the try below used to escape into the async handler and
-            // leave the row RUNNING for ever: the page then spun with nothing to wait for.
+            // A failure here must still finish the batch, or it would stay RUNNING forever.
             log.warn("Batch {} could not start: {}", batchId, e.getMessage(), e);
             finish(batchId, null, 0, "Пакетний аналіз не стартував: " + e.getMessage());
             return;
@@ -181,11 +168,8 @@ public class BatchAnalysisService {
         if (batch == null) return null;
         batch.setStatus(AnalysisStatus.RUNNING);
         batchRepository.save(batch);
-        // No touch of the lazy user here. execute() calls this method from inside the same
-        // class, so the call never goes through the Spring proxy and @Transactional does not
-        // apply: the entity comes back detached, and initialising an association on it throws
-        // LazyInitializationException. Only the id is needed downstream, and Hibernate answers
-        // that from the proxy itself, without a session.
+        // Called from inside this class, so @Transactional does not apply and the entity is
+        // detached: only the user's id is used, which Hibernate can read without a session.
         return batch;
     }
 

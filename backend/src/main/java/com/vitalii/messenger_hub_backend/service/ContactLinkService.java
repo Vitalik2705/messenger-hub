@@ -16,11 +16,8 @@ import java.time.LocalDateTime;
 import java.util.*;
 
 /**
- * Recognises that two accounts in different messengers belong to the same person.
- *
- * No link is ever created without the user saying so. The matcher only proposes; a wrong
- * merge is much more costly than a missed one, and nothing here has evidence strong enough
- * to justify acting alone.
+ * Recognises that accounts in different messengers belong to the same person. It only proposes; no
+ * link is created without the user's confirmation.
  */
 @Service
 @RequiredArgsConstructor
@@ -51,11 +48,8 @@ public class ContactLinkService {
     }
 
     /**
-     * Gives every personal chat an identity.
-     *
-     * Existing identities are left alone, including their display name. A counterpart who
-     * renames themselves must not quietly rewrite the evidence behind a decision the user
-     * already made.
+     * Gives every personal chat an identity. Existing identities, including their display names,
+     * are not changed.
      */
     @Transactional
     public int harvestIdentities(Long userId) {
@@ -81,15 +75,8 @@ public class ContactLinkService {
     }
 
     /**
-     * Whether a chat stands for a human being.
-     *
-     * A one-to-one chat is not the same thing as a person: bots and the messenger's own
-     * notification account are one-to-one too. Comparing their names produced perfect,
-     * useless matches — "Telegram" against "Telegram" scored 1.0 across two accounts and
-     * asked the user to confirm that a service chat was the same person as itself.
-     *
-     * A chat synced before the kind was recorded has none, and is admitted rather than
-     * dropped: losing a real person is the worse error, and the next sync fills it in.
+     * Whether a chat stands for a person. Bots and service accounts are one-to-one chats too and
+     * would otherwise match themselves across accounts. Chats with no recorded kind are admitted.
      */
     private boolean standsForAPerson(Chat chat) {
         ChatKind kind = chat.getChatKind();
@@ -97,11 +84,8 @@ public class ContactLinkService {
     }
 
     /**
-     * Compares every identity with every other and records the pairs worth asking about.
-     *
-     * Quadratic in the number of identities, which is fine at the scale of one person's
-     * address book and keeps the comparison honest — there is no blocking key that would
-     * survive transliteration and nicknames anyway.
+     * Compares every identity with every other and records pairs worth suggesting. Quadratic, which
+     * is fine for one person's contacts.
      */
     @Transactional
     public int proposeLinks(Long userId) {
@@ -145,9 +129,8 @@ public class ContactLinkService {
     }
 
     /**
-     * Two handles on the same account are the same conversation partner list — one person
-     * cannot appear twice there, so a match would be a false positive by construction.
-     * Identities already grouped under one contact have nothing left to decide.
+     * Pairs that cannot be the same person: two chats of one account, or identities already under
+     * one contact.
      */
     private boolean worthComparing(ContactIdentity a, ContactIdentity b) {
         if (Objects.equals(a.getMessengerAccountId(), b.getMessengerAccountId())) return false;
@@ -186,10 +169,8 @@ public class ContactLinkService {
     }
 
     /**
-     * The "this is the same person" button: links two identities the matcher never proposed.
-     *
-     * The decision is also written down as a confirmed suggestion, so a later rescan treats
-     * the pair as settled instead of offering it again.
+     * Links two identities by hand. Recorded as a confirmed suggestion so a rescan does not offer
+     * the pair again.
      */
     @Transactional
     public Contact linkManually(Long userId, Long identityAId, Long identityBId) {
@@ -210,12 +191,8 @@ public class ContactLinkService {
     }
 
     /**
-     * Removes an identity from its contact.
-     *
-     * A contact left with a single identity is dissolved: it no longer records a link
-     * between anything, and leaving it would show the user a "merged person" made of one
-     * account. Any confirmation behind the removed link becomes a rejection, so the matcher
-     * does not propose what the user has just undone.
+     * Removes an identity from its contact. A contact left with one identity is dissolved, and the
+     * removed link becomes a rejection so it is not suggested again.
      */
     @Transactional
     public void unlink(Long userId, Long identityId) {
@@ -306,11 +283,8 @@ public class ContactLinkService {
     // ── Internals ─────────────────────────────────────────────────────────────
 
     /**
-     * Puts two identities under one contact, whatever state they start in.
-     *
-     * When both already belong to contacts, the two are merged rather than one being
-     * discarded — otherwise confirming "A is B" would silently drop everything previously
-     * linked to B.
+     * Puts two identities under one contact. If both already have contacts, the contacts are merged
+     * so no earlier link is lost.
      */
     private Contact link(ContactIdentity a, ContactIdentity b) {
         Contact contactA = a.getContact();

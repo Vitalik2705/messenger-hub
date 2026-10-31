@@ -1,17 +1,11 @@
-import { createContext, useState, useContext, useEffect } from 'react';
+import { createContext, useState, useContext } from 'react';
 import authService from '../services/authService';
 
 const AuthContext = createContext(null);
 
+/** The signed-in user, read synchronously from storage as the initial state. */
 export const AuthProvider = ({ children }) => {
-    const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        const currentUser = authService.getCurrentUser();
-        setUser(currentUser);
-        setLoading(false);
-    }, []);
+    const [user, setUser] = useState(authService.getCurrentUser);
 
     const login = async (email, password) => {
         const data = await authService.login({ email, password });
@@ -25,20 +19,18 @@ export const AuthProvider = ({ children }) => {
         return data;
     };
 
+    /** After the profile is edited in settings: the new name shows everywhere at once. */
+    const updateUser = (next) => {
+        authService.storeUser(next);
+        setUser(next);
+    };
+
     const logout = () => {
         authService.logout();
         setUser(null);
     };
 
-    const value = {
-        user,
-        login,
-        register,
-        logout,
-        isAuthenticated: !!user,
-        loading,
-    };
-
+    const value = { user, login, register, updateUser, logout, isAuthenticated: !!user };
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 

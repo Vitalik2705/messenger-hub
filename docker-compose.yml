@@ -37,6 +37,11 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      # Times from the messengers are converted to the JVM's zone and stored without one,
+      # and the browser reads them as local time. A container defaults to UTC, which put
+      # every message two or three hours early on screen.
+      TZ: ${TZ:-Europe/Kyiv}
+
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: ${DB_NAME:-messenger_hub}
@@ -46,8 +51,6 @@ services:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in .env}
 
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
-      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-messenger_hub_bot}
 
       # Service names, not localhost: inside a container localhost is the container.
       # Same ports as a hand-started stack (start-all.ps1), so one set of numbers holds
@@ -134,6 +137,8 @@ services:
     environment:
       WHISPER_MODEL: ${WHISPER_MODEL:-small}
       WHISPER_LANGUAGE: uk
+      # CPU threads for decoding; 0 lets CTranslate2 choose, which leaves cores idle.
+      WHISPER_THREADS: ${WHISPER_THREADS:-8}
     volumes:
       # The model downloads on the first transcription; keep it across rebuilds.
       - whisper-models:/home/service/.cache/huggingface
@@ -142,7 +147,7 @@ services:
 
   # Optional: only started with --profile ollama. Pull the models once after it is up:
   #   docker compose exec ollama ollama pull qwen2.5:7b
-  #   docker compose exec ollama ollama pull nomic-embed-text
+  #   docker compose exec ollama ollama pull bge-m3
   ollama:
     image: ollama/ollama:latest
     profiles: [ollama]

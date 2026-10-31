@@ -1,160 +1,72 @@
 import { useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext.jsx';
-import {
-    Container,
-    Paper,
-    TextField,
-    Button,
-    Typography,
-    Box,
-    Alert,
-    Link,
-} from '@mui/material';
-import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import { Box, Link } from '@mui/material';
+import { useAuth } from '../../context/AuthContext';
+import AuthLayout from './AuthLayout';
+import FormField from '../../components/form/FormField';
+import FormAlert from '../../components/form/FormAlert';
+import SubmitButton from '../../components/form/SubmitButton';
+import PasswordMeter from '../../components/form/PasswordMeter';
+import { formErrors } from '../../utils/formErrors';
+import { t } from '../../i18n';
 
-const RegisterPage = () => {
-    const [formData, setFormData] = useState({
-        email: '',
-        password: '',
-        confirmPassword: '',
-        firstName: '',
-        lastName: '',
-    });
-    const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
+const EMPTY = { firstName: '', lastName: '', email: '', password: '', confirmPassword: '' };
 
+export default function RegisterPage() {
+    const [form, setForm] = useState(EMPTY);
+    const [errors, setErrors] = useState({ message: '', fields: {} });
+    const [busy, setBusy] = useState(false);
     const { register } = useAuth();
     const navigate = useNavigate();
 
-    const handleChange = (e) => {
-        setFormData({
-            ...formData,
-            [e.target.name]: e.target.value,
-        });
-    };
+    const field = (name) => ({
+        name,
+        value: form[name],
+        onChange: (e) => setForm(prev => ({ ...prev, [name]: e.target.value })),
+        error: errors.fields[name],
+    });
+
+    // Said while typing rather than after a round trip: both are knowable here.
+    const tooShort = form.password.length > 0 && form.password.length < 8;
+    const mismatch = form.confirmPassword.length > 0 && form.confirmPassword !== form.password;
+    const ready = form.email.trim() && form.password.length >= 8 && form.password === form.confirmPassword;
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setError('');
-
-        if (formData.password !== formData.confirmPassword) {
-            setError('Паролі не збігаються');
-            return;
-        }
-
-        setLoading(true);
-
+        if (!ready) return;
+        setErrors({ message: '', fields: {} });
+        setBusy(true);
         try {
-            await register(formData);
-            navigate('/dashboard');
+            await register({ ...form, email: form.email.trim() });
+            navigate('/dashboard', { replace: true });
         } catch (err) {
-            setError(err.response?.data?.message || 'Помилка реєстрації');
-        } finally {
-            setLoading(false);
+            setErrors(formErrors(err, t('Не вдалося створити акаунт')));
+            setBusy(false);
         }
     };
 
     return (
-        <Container component="main" maxWidth="xs">
-            <Box
-                sx={{
-                    minHeight: '100vh',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                }}
-            >
-                <Paper elevation={3} sx={{ p: 4, width: '100%' }}>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <PersonAddIcon sx={{ fontSize: 40, color: 'primary.main', mb: 2 }} />
-                        <Typography component="h1" variant="h5" fontWeight="bold" gutterBottom>
-                            Створити акаунт
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                            Зареєструйтесь у Messenger Hub
-                        </Typography>
-
-                        {error && (
-                            <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
-                                {error}
-                            </Alert>
-                        )}
-
-                        <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%' }}>
-                            <TextField
-                                margin="normal"
-                                required
-                                fullWidth
-                                id="email"
-                                label="Електронна пошта"
-                                name="email"
-                                autoComplete="email"
-                                autoFocus
-                                value={formData.email}
-                                onChange={handleChange}
-                            />
-                            <TextField
-                                margin="normal"
-                                fullWidth
-                                id="firstName"
-                                label="Ім'я"
-                                name="firstName"
-                                value={formData.firstName}
-                                onChange={handleChange}
-                            />
-                            <TextField
-                                margin="normal"
-                                fullWidth
-                                id="lastName"
-                                label="Прізвище"
-                                name="lastName"
-                                value={formData.lastName}
-                                onChange={handleChange}
-                            />
-                            <TextField
-                                margin="normal"
-                                required
-                                fullWidth
-                                name="password"
-                                label="Пароль"
-                                type="password"
-                                id="password"
-                                value={formData.password}
-                                onChange={handleChange}
-                            />
-                            <TextField
-                                margin="normal"
-                                required
-                                fullWidth
-                                name="confirmPassword"
-                                label="Підтвердіть пароль"
-                                type="password"
-                                id="confirmPassword"
-                                value={formData.confirmPassword}
-                                onChange={handleChange}
-                            />
-                            <Button
-                                type="submit"
-                                fullWidth
-                                variant="contained"
-                                sx={{ mt: 3, mb: 2 }}
-                                disabled={loading}
-                            >
-                                {loading ? 'Створення акаунту...' : 'Зареєструватися'}
-                            </Button>
-                            <Box sx={{ textAlign: 'center' }}>
-                                <Link component={RouterLink} to="/login" variant="body2">
-                                    Вже є акаунт? Увійти
-                                </Link>
-                            </Box>
-                        </Box>
-                    </Box>
-                </Paper>
+        <AuthLayout
+            title={t('Створіть акаунт')}
+            subtitle={t('Хвилина — і можна підключати перший месенджер.')}
+            footer={<>{t('Вже є акаунт? ')}<Link component={RouterLink} to="/login" sx={{ fontWeight: 700 }}>{t('Увійти')}</Link></>}
+        >
+            <Box component="form" onSubmit={handleSubmit} noValidate>
+                <FormAlert>{errors.message}</FormAlert>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, columnGap: 1.5 }}>
+                    <FormField label={t('Ім\'я')} autoComplete="given-name" autoFocus placeholder={t('Олена')} {...field('firstName')} />
+                    <FormField label={t('Прізвище')} autoComplete="family-name" placeholder={t('Коваль')} {...field('lastName')} />
+                </Box>
+                <FormField label={t('Електронна пошта')} type="email" autoComplete="email" placeholder="you@example.com" {...field('email')} />
+                <FormField label={t('Пароль')} type="password" autoComplete="new-password" placeholder={t('Щонайменше 8 символів')}
+                           {...field('password')}
+                           error={errors.fields.password || (tooShort ? t('Щонайменше 8 символів') : '')} />
+                <PasswordMeter password={form.password} />
+                <FormField label={t('Повторіть пароль')} type="password" autoComplete="new-password"
+                           {...field('confirmPassword')}
+                           error={errors.fields.confirmPassword || (mismatch ? t('Паролі не збігаються') : '')} />
+                <SubmitButton busy={busy} busyText={t('Створення акаунту…')} disabled={!ready}>{t('Зареєструватися')}</SubmitButton>
             </Box>
-        </Container>
+        </AuthLayout>
     );
-};
-
-export default RegisterPage;
+}

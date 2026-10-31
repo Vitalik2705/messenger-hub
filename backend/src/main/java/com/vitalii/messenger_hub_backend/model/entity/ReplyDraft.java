@@ -12,11 +12,8 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * One reply the model wrote, and what happened to it.
- *
- * Kept even after it is rejected. A draft nobody sent is the most informative record this
- * feature produces: the ratio of sent to edited to rejected is the only honest measure of
- * whether a 7B model is any good at answering these particular people.
+ * A reply the model wrote and what happened to it. Kept even when rejected: sent vs edited vs
+ * rejected is the measure of the feature's quality.
  */
 @Entity
 @Table(

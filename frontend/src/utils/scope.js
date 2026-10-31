@@ -1,18 +1,10 @@
 /**
- * What the chat list is currently narrowed to.
+ * What the chat list is narrowed to. A scope is one of:
+ * 'ALL' — every chat from every account
+ * '<MESSENGER_TYPE>' — one network, all of its accounts
+ * 'ACC:<TYPE>:<accountId>' — a single account
  *
- * A scope is one of:
- *   'ALL'                    — every chat from every connected account
- *   '<MESSENGER_TYPE>'       — one network, all of its accounts
- *   'ACC:<TYPE>:<accountId>' — a single account
- *
- * The account form exists because two accounts on the same network are indistinguishable
- * under a plain type filter, and that is precisely when narrowing matters: their chats
- * interleave in one list with nothing to tell them apart.
- *
- * The network is carried inside the account scope rather than looked up from the account
- * id. That keeps every helper here pure, so the side that builds a scope and the side that
- * applies it never have to agree on anything beyond this file.
+ * The network is carried inside the account scope so these helpers stay pure.
  */
 
 const ACCOUNT_PREFIX = 'ACC:';

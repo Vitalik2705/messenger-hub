@@ -1,12 +1,9 @@
 package com.vitalii.messenger_hub_backend.model.enums;
 
 /**
- * What an outgoing attachment is meant to be, which is not always what its MIME type says.
- *
- * VOICE is the reason this exists. A voice note and an audio file can carry byte-identical
- * content; the difference is that the sender pressed a microphone button, and every
- * messenger renders the two differently. Only the client knows which happened, so the
- * intent travels with the upload instead of being guessed from the bytes.
+ * What an outgoing attachment is meant to be. VOICE exists because a voice note and an audio file
+ * can be byte-identical, yet messengers render them differently; only the client knows which was
+ * intended.
  */
 public enum MediaKind {
     VOICE,

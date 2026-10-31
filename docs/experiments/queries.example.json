@@ -1,0 +1,7 @@
+{
+  "_note": "Copy to queries.local.json and write queries about YOUR archive. Relevance = a message whose text matches `relevant` (case-insensitive regex). type: literal = the query's words occur in the message; paraphrase = they do not. The local file stays out of git: its patterns are fragments of private correspondence.",
+  "queries": [
+    {"q": "оплатив інтернет", "relevant": "оплатив інтернет", "type": "literal"},
+    {"q": "хто платив за wi-fi цього місяця", "relevant": "оплатив інтернет", "type": "paraphrase"}
+  ]
+}

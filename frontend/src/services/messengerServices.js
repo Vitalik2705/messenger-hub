@@ -4,13 +4,7 @@ import discordService from './discordService';
 import whatsappService from './whatsappService';
 import viberService from './viberService';
 
-/**
- * One place that knows which service handles which network.
- *
- * Before this, every action repeated the same if-chain over messengerType, and deletion
- * had no chain at all — it called Telegram for every chat, so deleting a Slack message
- * asked Telegram to remove an id it had never seen.
- */
+/** Which frontend service handles which network. */
 const SERVICES = {
     TELEGRAM: telegramService,
     SLACK: slackService,

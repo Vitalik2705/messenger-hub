@@ -7,10 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
-/**
- * One hit from a history search: enough to render a result row and to jump straight to the
- * message in its chat, without a second round-trip.
- */
+/** One history search hit: enough to render the row and open the message in its chat. */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -30,16 +27,17 @@ public class MessageSearchResultDTO {
     private String text;
 
     /**
-     * The matching fragment, with hits wrapped in {@code [[hl]]…[[/hl]]}. Built by Postgres,
-     * which knows exactly which tokens matched — highlighting on the client would have to
-     * guess at prefix matches and get them wrong.
-     *
-     * The markers are deliberately not HTML. Around them sits unescaped text that arrived
-     * from a messenger, so the snippet must never be injected as markup; the client splits
-     * on the markers and renders each piece as text. A plain-text sentinel keeps that the
-     * only reasonable way to consume it.
+     * The matching fragment from Postgres, with hits wrapped in {@code [[hl]]…[[/hl]]}. Plain-text
+     * markers rather than HTML, because the surrounding text is unescaped messenger content; the
+     * client splits on them and renders text.
      */
     private String snippet;
 
     private Double rank;
+
+    /**
+     * In hybrid search, which search found this message: "both", "text" or "semantic". Null in
+     * single-mode searches.
+     */
+    private String matchedBy;
 }

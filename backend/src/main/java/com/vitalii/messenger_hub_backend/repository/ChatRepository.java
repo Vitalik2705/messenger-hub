@@ -29,12 +29,8 @@ public interface ChatRepository extends JpaRepository<Chat, Long> {
     // ── Background archiving ──────────────────────────────────────────────────
 
     /**
-     * Chats of still-connected accounts whose history has not been pulled recently,
-     * oldest first so the archiver cycles through everything instead of favouring
-     * the same few chats.
-     *
-     * Returns a projection rather than entities: the caller performs network calls
-     * between rows and must not hold lazy references to a closed session.
+     * Chats of connected accounts, least recently backfilled first so the archiver cycles through
+     * all of them. A projection, because the caller makes network calls between rows.
      * Columns: chatId, externalChatId, messengerAccountId, userId, messengerType.
      */
     @Query("select c.id, c.externalChatId, ma.id, u.id, ma.messengerType " +
@@ -51,12 +47,8 @@ public interface ChatRepository extends JpaRepository<Chat, Long> {
     void markArchived(@Param("chatId") Long chatId, @Param("archivedAt") LocalDateTime archivedAt);
 
     /**
-     * The owner's email, read as a projection rather than through {@code chat.getUser()}.
-     *
-     * A Chat handed to the archiver was loaded by an earlier call and is already detached,
-     * so its lazy user proxy cannot be initialised — opening a new transaction does not
-     * re-attach it. This worked from HTTP threads only because open-session-in-view happened
-     * to keep a session alive, and failed on every background thread.
+     * The owner's email as a projection: chats handed to background jobs are detached, so
+     * chat.getUser() cannot be initialised there.
      */
     @Query("select c.user.email from Chat c where c.id = :chatId")
     Optional<String> findOwnerEmail(@Param("chatId") Long chatId);
@@ -64,8 +56,8 @@ public interface ChatRepository extends JpaRepository<Chat, Long> {
     // ── Contact linking ───────────────────────────────────────────────────────
 
     /**
-     * One-to-one chats with a usable name — the only chats that stand for a person.
-     * A group's name describes the room, so linking on it would merge unrelated people.
+     * Named one-to-one chats — the only ones that stand for a person. A group's name describes the
+     * room.
      */
     @Query("select c from Chat c join fetch c.messengerAccount ma " +
             "where c.user.id = :userId " +

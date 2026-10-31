@@ -4,6 +4,7 @@ import com.vitalii.messenger_hub_backend.model.dto.AuthResponse;
 import com.vitalii.messenger_hub_backend.model.dto.LoginRequest;
 import com.vitalii.messenger_hub_backend.model.dto.RegisterRequest;
 import com.vitalii.messenger_hub_backend.service.AuthService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -15,7 +16,6 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class AuthController {
 
     private final AuthService authService;
@@ -27,8 +27,9 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
-        AuthResponse response = authService.login(request);
+    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request,
+                                              HttpServletRequest http) {
+        AuthResponse response = authService.login(request, http.getRemoteAddr());
         return ResponseEntity.ok(response);
     }
 

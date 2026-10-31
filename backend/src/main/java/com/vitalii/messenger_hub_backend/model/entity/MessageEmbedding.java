@@ -7,17 +7,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * One message, as a vector.
- *
- * Stored as packed float32 bytes rather than a Postgres array or a pgvector column. The
- * reason is scale, and it cuts the other way from what one expects: pgvector earns its keep
- * at millions of rows, where an approximate index beats a scan. One person's archive is
- * tens of thousands — a full scan over that is a few million multiply-adds, which is
- * milliseconds. Adding a database extension to avoid milliseconds would be paying setup
- * cost for nothing.
- *
- * The bytes are also the compact form: 768 dimensions is 3 KB here against roughly 9 KB as
- * text, and the whole archive fits comfortably in memory for searching.
+ * A message's vector as packed float32 bytes (a large object), not a pgvector column. pgvector pays
+ * off at millions of rows; one person's archive is tens of thousands, and a full in-memory scan
+ * takes milliseconds. 1024 dimensions take 4 KB.
  */
 @Entity
 @Table(

@@ -9,9 +9,8 @@ public enum AnalysisStatus {
     /** Finished with a result. */
     DONE,
     /**
-     * Finished without one. The reason is kept on the run: a failed model call is the
-     * expected case here, not an exceptional one — Ollama is a separate process the user
-     * controls and can simply not be running.
+     * Finished without a model result; the reason is kept on the run. Expected whenever Ollama is
+     * not running.
      */
     FAILED
 }

@@ -10,18 +10,11 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 /**
- * Authenticates STOMP clients on CONNECT.
- *
- * The SockJS handshake itself stays open — it carries no data. Authentication happens on
- * the CONNECT frame instead, which is where the client can supply its JWT. Without a valid
- * token the connection is rejected, so no subscription is ever established.
- *
- * Once a principal is attached, Spring routes user destinations (/user/queue/**) by that
- * principal, which is what makes it impossible to subscribe to someone else's messages.
+ * Authenticates STOMP clients on CONNECT with their JWT; without a valid token the connection is
+ * rejected. The attached principal is what routes /user/queue/** to that user only.
  */
 @Component
 @RequiredArgsConstructor
@@ -52,9 +45,9 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
         String token = authHeader.substring(BEARER_PREFIX.length());
         try {
             String email = jwtUtil.extractEmail(token);
-            UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+            AppUserDetails userDetails = userDetailsService.loadUserByUsername(email);
 
-            if (!Boolean.TRUE.equals(jwtUtil.validateToken(token, email))) {
+            if (!jwtUtil.validateToken(token, userDetails)) {
                 throw new MessagingException("Invalid authentication token");
             }
 

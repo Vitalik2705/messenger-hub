@@ -1,14 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { t } from '../i18n';
 
 /**
- * Browsers do not agree on what they can record.
- *
- * Firefox produces OGG/Opus, which is exactly what Telegram and WhatsApp want, so asking
- * for it first means no repackaging on the server at all. Chrome only offers WebM — the
- * same Opus audio in a different container, which the backend remuxes. Safari ignores both
- * and records AAC in mp4, which has to be re-encoded.
- *
- * Preferring the format that needs least work is worth the four lines it costs.
+ * Recording formats in order of preference. Firefox records OGG/Opus, which the messengers accept
+ * as-is; Chrome records Opus in WebM, which the server remuxes; Safari records AAC in MP4, which is
+ * re-encoded.
  */
 const PREFERRED_TYPES = [
     'audio/ogg;codecs=opus',
@@ -23,11 +19,8 @@ function pickMimeType() {
 }
 
 /**
- * Records a voice message.
- *
- * `stop()` resolves with the recording; `cancel()` throws it away. Both release the
- * microphone — without stopping every track the browser keeps its "recording" indicator
- * lit long after the user has finished, which reads as the app still listening.
+ * Records a voice message. `stop()` resolves with the recording, `cancel()` discards it; both
+ * release the microphone.
  */
 export default function useVoiceRecorder() {
     const [isRecording, setIsRecording] = useState(false);
@@ -54,7 +47,7 @@ export default function useVoiceRecorder() {
     const start = useCallback(async () => {
         setError('');
         if (typeof MediaRecorder === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-            setError('Браузер не підтримує запис звуку');
+            setError(t('Браузер не підтримує запис звуку'));
             return false;
         }
         try {
@@ -80,8 +73,8 @@ export default function useVoiceRecorder() {
             // Denied permission and absent hardware arrive as the same rejection, and the
             // user can act on neither without being told which.
             setError(e.name === 'NotAllowedError'
-                ? 'Немає доступу до мікрофона'
-                : 'Не вдалося почати запис');
+                ? t('Немає доступу до мікрофона')
+                : t('Не вдалося почати запис'));
             releaseMicrophone();
             return false;
         }

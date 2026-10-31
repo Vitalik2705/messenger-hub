@@ -6,12 +6,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * An attachment on its way out, as the browser sends it.
- *
- * Base64 rather than multipart so the whole chain — controller, service, microservice —
- * speaks the same JSON it already speaks everywhere else. The cost is a third more bytes
- * on the wire and the payload held in memory, which is why
- * {@link com.vitalii.messenger_hub_backend.service.MediaUploadValidator} caps the size.
+ * An outgoing attachment as base64 JSON, the same format the whole chain already speaks. Size is
+ * capped by MediaUploadValidator.
  */
 @Data
 @NoArgsConstructor

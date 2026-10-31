@@ -11,11 +11,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * A person, as distinct from the accounts they can be reached through.
- *
- * A contact exists only once two or more identities have been linked — a handle nobody has
- * connected to anything else is just a {@link ContactIdentity} standing on its own. That
- * keeps the table meaningful: every row here is a judgement the user actually made.
+ * A person, as distinct from the accounts they are reached through. Exists only once the user has
+ * linked two or more identities.
  */
 @Entity
 @Table(name = "contacts", indexes = @Index(name = "idx_contacts_user", columnList = "user_id"))
